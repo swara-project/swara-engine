@@ -15,7 +15,7 @@ Welcome to the internal core implementation of the **swara project**. The core c
 
 The swara Language enforces a **strict Separation of Concerns** through file layer declarations (`ass [layer]`). The core engine validates and evaluates these files independently but cooperatively:
 
-- **sttr (Structure):** Defines the backbone of the application. It maps `entry_point`s and handles structural routing (`route`). Contains NO logic.
+- **sttr (Structure):** Defines the backbone of the application. It employs a centralized Orchestration Pattern for routing (instead of direct jumping), maps `entry_point`s, handles structural routing (`route`), and defines fallbacks via `error_handler -> [route];`. Contains NO logic.
 - **lgca (Logic):** The brain. Responsible for execution flow (conditionals, loops), variable manipulation, and I/O operations.
 - **fncs (Functions):** Reusable blocks of logic. Creates decoupled operations invoked by `lgca`.
 - **dtta (Data):** Establishes forms, database molds, structural relationships (`refer`), and behavior-driven mutations (mutable, immutable, computed, derived).
@@ -41,7 +41,7 @@ The `swaraRuntime` wrapper prepares the execution context.
 The core evaluator (`swaraBytecodeEngine`). It handles:
 - **Lexical/State Management:** Keeps track of standard execution states, loaded links, history, and active routes.
 - **Form Mutability Enforcement:** Enforces swara's deep mutability schemas (`immutable`, `mutable`, `derived`, `computed`) at runtime.
-- **Control Flow:** Computes opcodes like `JUMP`, `JUMP_IF_FALSE`, `CALL_FUNC`.
+- **Control Flow:** Computes centralized route orchestrations and calls (`CALL_FUNC`). Direct jumping opcodes have been replaced entirely by the centralized Orchestration Pattern.
 - **Memory Maps:** Maintains dictionaries for localized variables (`num`, `dec`, `txt`, `bin`, `list`, `empty`), data models (`forms`), and registered functions.
 
 ---
@@ -76,7 +76,7 @@ The `swaraBytecodeEngine` translates operations into internal Opcodes for system
 ### Memory & Variable Constraints
 Variables are initiated via `set` and transformed via `update`. Data types (`num`, `dec`, `txt`, `bin`, `list`, `empty`) are strictly evaluated for assignments.
 
-- **Data Tracking / Scope Enforcement:** Variables created or scoped within a specific route block are encapsulated.
+- **Data Tracking / Scope Enforcement:** Variables created or scoped within a specific route block are encapsulated. The engine utilizes Commit/Rollback variable snapshots during route transitions to maintain safe state orchestration.
 - **Form Behaviors**: The engine parses specific syntax rules for fields dynamically:
     - `computed`: Requires exact component expressions to be filled.
     - `derived`: Allows updates but validates operation history upstream.
@@ -87,7 +87,7 @@ Variables are initiated via `set` and transformed via `update`. Data types (`num
 The internal virtual machine processes the following opcodes (as defined in `Opcode(Enum)`):
 - **Variables**: `SET`, `UPDATE`
 - **Lists**: `LIST_APPEND`, `LIST_POP`, `LIST_SIZE`, `LIST_GET_INDEX`, `LIST_SET_INDEX`
-- **Control Flow**: `JUMP`, `JUMP_IF_FALSE`
+- **Control Flow**: `ROUTE_TRANSITION`, `ORCHESTRATE` (legacy jumping opcodes have been deprecated)
 - **I/O**: `PRINT`, `ASK`, `SEND_PETITION`
 - **Execution**: `CALL_FUNC`, `RETURN`, `ROUTE_TRANSITION`, `NOOP`
 

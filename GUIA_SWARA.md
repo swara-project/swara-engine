@@ -40,13 +40,14 @@ link from dtta -> types.swara;
 El flujo de ejecución en Swara está basado en bloques que abren con la palabra `delimiter` indicando la capa interna a la que pertenece ese bloque.
 
 ### 🧩 2.1 Capa de Estructura (`sttr`) - Enrutamiento y Scopes
-Swara funciona como una especie de gran máquina de estados a través de "rutas". Dejas una ruta, y viajas a otra. **IMPORTANTE:** Las variables nacen y mueren de forma aislada en su propia ruta. Si cambias de ruta e intentas usar una variable anterior fallará con un `SCOPE ERROR`, a menos que las integres a las maletas del nuevo viaje (usando `inject`).
+Swara funciona mediante un Patrón de Orquestación Centralizada para el enrutamiento (Centralized Orchestration Pattern), prohibiendo el clásico "jumping". Dejas una ruta, y el orquestador te transiciona a otra. **IMPORTANTE:** Las variables nacen y mueren de forma aislada en su propia ruta. Si cambias de ruta e intentas usar una variable anterior fallará con un `SCOPE ERROR`, a menos que las integres al nuevo viaje usando `inject`, el cual ahora funciona mediante un mecanismo seguro de Commit/Rollback de snapshots durante las transiciones.
 
-En un archivo `sttr` declaras:
+En un archivo `sttr` declaras (mediante el Centralized Orchestration Pattern):
 * `entry_point -> ruta_inicial;` : Define dónde arranca la VM.
 * `route origen -> destino;` : Redirección obligatoria incondicional.
 * `route origen -> destino when [condicion];` : Redirección condicional según la variable final evaluada en la ruta origen.
-* **`inject [variables]`**: Se declara dentro de la llave de un route. Autoriza la migración de variables puntuales al scope destino.
+* `error_handler -> [route];` : Redirige centralmente de forma segura en caso de fallos.
+* **`inject [variables]`**: Se declara dentro de la llave de un route. Autoriza la migración de variables usando snapshots de Commit/Rollback.
 * **Declaración de Sub-rutas:** Puedes inicializar bloques con `route nombre { ... }`.
 
 **Ejemplo `enrutador.swara`:**

@@ -27,15 +27,7 @@ class Opcode(Enum):
     # Funciones y Rutas
     CALL_FUNC = auto()
     RETURN = auto()
-    ROUTE_TRANSITION = auto()
-    
-    # Operación nula (Útil como comodín)
-    NOOP = auto()
 
-class _RouteTransition(Exception):
-    def __init__(self, target_route, injected_scope=None):
-        self.target_route = target_route
-        self.injected_scope = injected_scope
 
 class _GiveException(Exception):
     def __init__(self, value):
@@ -54,8 +46,10 @@ class swaraBytecodeEngine:
         self.output_handler = print
         self.routes = {}
         self.entry_point = None
+        self.error_handler = None
         self.compiled_link_files = set()
         self.allowed_scope = None
+        self.route_transitions = {}
 
     def error(self, error_type, message, line_num="?"):
         error_msg = f"[{error_type}] Line {line_num} in '{self.current_file}':\n-> {message}"
@@ -494,7 +488,7 @@ class swaraBytecodeEngine:
                     continue
 
             # LOGIC RUTAS/LINKS (Pasivos)
-            elif line.startswith("link from") or line.startswith("entry_point"):
+            elif line.startswith("link from") or line.startswith("entry_point") or line.startswith("error_handler"):
                 if line.startswith("link from"):
                     match = re.search(r"link from\s+(sttr|lgca|fncs|dtta)\s*->\s*([\w\.]+)", line)
                     if match:
@@ -512,6 +506,9 @@ class swaraBytecodeEngine:
                 elif line.startswith("entry_point"):
                     m = re.search(r"entry_point\s*->\s*([\w\.]+)", line)
                     if m: self.entry_point = m.group(1)
+                elif line.startswith("error_handler"):
+                    m = re.search(r"error_handler\s*->\s*([\w\.]+)", line)
+                    if m: self.error_handler = m.group(1)
                 i += 1
 
             # SEND.PETITION
@@ -526,12 +523,15 @@ class swaraBytecodeEngine:
                     has_block = "{" in line
                     match = re.search(r"route\s+(\w+)\s*->\s*(\w+)(?:\s+when\s+\[(.*?)\])?", line)
                     if match:
+                        origin_route = match.group(1)
                         target_route = match.group(2)
                         condition = match.group(3)
-                        injected = None
                         
+                        if origin_route not in self.route_transitions:
+                            self.route_transitions[origin_route] = []
+                            
+                        injected = []
                         if has_block:
-                            injected = []
                             body_inst, end_i = self._collect_block(instructions, i)
                             for b_line, b_ln in body_inst:
                                 if b_line.startswith("inject"):
@@ -545,7 +545,12 @@ class swaraBytecodeEngine:
                         else:
                             i += 1
                             
-                        bytecode.append((Opcode.ROUTE_TRANSITION, target_route, condition, injected, line_num))
+                        self.route_transitions[origin_route].append({
+                            "target": target_route,
+                            "condition": condition,
+                            "injected": injected if injected else None,
+                            "line_num": line_num
+                        })
                         continue
                 elif "{" in line:
                     match = re.search(r"route\s+(\w+)\s*\{", line)
@@ -845,19 +850,6 @@ class swaraBytecodeEngine:
                     self.output_handler(f"[NETWORK MOCK]: Sending petition -> {payload}")
                     pc += 1
 
-                elif opcode == Opcode.ROUTE_TRANSITION:
-                    _, target_route, condition, injected, _ = instruction
-                    
-                    if condition:
-                        if not self.evaluate_condition(condition, line_num):
-                            pc += 1
-                            continue # Si no se cumple, ignoramos la ruta y seguimos
-                            
-                    resolved_target = target_route
-                    if target_route in self.variables:
-                        self._enforce_scope(target_route, line_num)
-                        resolved_target = str(self.variables[target_route]["value"])
-                    raise _RouteTransition(resolved_target, injected)
 
                 elif opcode == Opcode.JUMP:
                     _, target_idx, _ = instruction
@@ -866,8 +858,6 @@ class swaraBytecodeEngine:
                 else:
                     pc += 1
 
-            except _RouteTransition:
-                raise
             except Exception as e:
                 # Si la excepcion ya contiene nuestro formato de error, la relanzamos
                 if str(e).startswith("["): 
@@ -895,15 +885,39 @@ class swaraBytecodeEngine:
                 insts = self.get_instructions(content)
                 body = self.compile(insts)
 
+            snapshot = deepcopy(self.variables)
             try:
                 self.run_vm(body)
-                break
-            except _RouteTransition as rt:
-                current_route = rt.target_route
-                if rt.injected_scope is not None:
-                    self.allowed_scope = set(rt.injected_scope)
+                next_route = None
+                injected_scope = None
+                
+                # Evaluamos transiciones usando el estado final de las variables tras ejecutar la ruta actual
+                if current_route in self.route_transitions:
+                    for transition in self.route_transitions[current_route]:
+                        condition = transition["condition"]
+                        if not condition or self.evaluate_condition(condition, transition["line_num"]):
+                            next_route = transition["target"]
+                            if next_route in self.variables:
+                                self._enforce_scope(next_route, transition["line_num"])
+                                next_route = str(self.variables[next_route]["value"])
+                            injected_scope = transition["injected"]
+                            break
+                            
+                if next_route:
+                    current_route = next_route
+                    if injected_scope is not None:
+                        self.allowed_scope = set(injected_scope)
+                    else:
+                        self.allowed_scope = None
                 else:
+                    break
+            except Exception as e:
+                self.variables = snapshot
+                if self.error_handler:
+                    current_route = self.error_handler
                     self.allowed_scope = None
+                else:
+                    raise e
 
     def execute(self, instructions):
         # We perform compilation first
