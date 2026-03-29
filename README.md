@@ -1,4 +1,4 @@
-# swara Language Core
+# The Swara Project Core
 
 Welcome to the internal core implementation of the **swara project**. The core comprises the compiler, runtime environment, and bytecode evaluation engine that power swara's strictly layered architecture (`sttr`, `lgca`, `fncs`, `dtta`).
 
