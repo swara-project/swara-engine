@@ -203,15 +203,31 @@ class swaraBytecodeEngine:
         self.variables[var_name] = {"value": value, "type": v_type, "behavior": behavior, "derived_from": derived_from}
 
     def validate_passport(self, code):
-        regex = r"declare\s+([\w\.]+)\s+ass\s+(sttr|lgca|fncs|dtta)\s*\{"
-        matches = list(re.finditer(regex, code, re.IGNORECASE))
-        if not matches:
+        passport_regex = r"declare\s+([\w\.]+)\s+ass\s+(sttr|lgca|fncs|dtta)"
+        passport_matches = list(re.finditer(passport_regex, code, re.IGNORECASE))
+        if not passport_matches:
             raise Exception("[LAYER ARCHITECTURE ERROR] Invalid Passport format.")
-        match = matches[0]
+        match = passport_matches[0]
         self.current_file = match.group(1).strip()
         self.current_layer = match.group(2).strip().lower()
-        content_match = re.search(r"\{([\s\S]*)\}", code)
-        return content_match.group(1) if content_match else ""
+        
+        # Validar el uso de 'delimiter' y que la capa coincida con el passport
+        delimiter_regex = r"delimiter\s+(sttr|lgca|fncs|dtta)\s+(\w+)\s*\{([\s\S]*)\}"
+        delimiter_match = re.search(delimiter_regex, code, re.IGNORECASE)
+        if not delimiter_match:
+            raise Exception("[LAYER ARCHITECTURE ERROR] Missing or invalid 'delimiter' block. Expected 'delimiter <layer> <name> { ... }'.")
+            
+        block_layer = delimiter_match.group(1).lower()
+        if block_layer != self.current_layer:
+            raise Exception(f"[LAYER ARCHITECTURE ERROR] Layer mismatch. File declared as '{self.current_layer}' but delimiter specifies '{block_layer}'.")
+            
+        # Extraemos el contenido de todo el programa (ignorando todo hasta el inicio pero preservando 'link from')
+        # Para que los links externos (link from ...) funcionen, extraemos solo su bloque para las instrucciones a analizar, 
+        # PERO incluimos los 'link from' explícitamente ya que suelen ir afuera del delimiter.
+        links = "\n".join(re.findall(r"link\s+from\s+.*?;?", code[:delimiter_match.start()]))
+        block_content = delimiter_match.group(3)
+        
+        return links + "\n" + block_content
 
     def get_instructions(self, content):
         clean_content = re.sub(r"\/\/.*", "", content)

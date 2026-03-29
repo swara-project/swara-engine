@@ -15,7 +15,7 @@ En Swara, cada archivo tiene un propósito único. Violar esto lanzará un `Laye
    - **No** se permite lógica general aquí (ni `if`, ni declaracion de variables estándar).
 2. **lgca (Lógica/Logic):** 
    - Condicionales (`if`, `switch`), variables, I/O, ejecución de funciones.
-   - Definicion de bloques de lógica enrutada (`! lgca nombre_ruta { ... }`).
+   - Definicion de bloques de lógica enrutada (`delimiter lgca nombre_ruta { ... }`).
 3. **fncs (Funciones/Functions):** 
    - Declaración de funciones reutilizables con `crte function` e invocables con `call function`.
 4. **dtta (Datos/Data):** 
@@ -37,7 +37,7 @@ link from dtta -> types.swara;
 
 ## 🏛️ 2. Bloques y Sintaxis por Capa
 
-El flujo de ejecución en Swara está basado en bloques que abren con el símbolo `!` indicando la capa interna a la que pertenece ese bloque.
+El flujo de ejecución en Swara está basado en bloques que abren con la palabra `delimiter` indicando la capa interna a la que pertenece ese bloque.
 
 ### 🧩 2.1 Capa de Estructura (`sttr`) - Enrutamiento y Scopes
 Swara funciona como una especie de gran máquina de estados a través de "rutas". Dejas una ruta, y viajas a otra. **IMPORTANTE:** Las variables nacen y mueren de forma aislada en su propia ruta. Si cambias de ruta e intentas usar una variable anterior fallará con un `SCOPE ERROR`, a menos que las integres a las maletas del nuevo viaje (usando `inject`).
@@ -54,7 +54,7 @@ En un archivo `sttr` declaras:
 declare enrutador.swara ass sttr
 link from lgca -> vistas.swara;
 
-! sttr setup {
+delimiter sttr setup {
     entry_point -> home_view;
     
     route home_view -> login_view when [logged_in == no] {
@@ -70,7 +70,7 @@ En estos archivos colocarás los bloques de código que ejecutan las operaciones
 ```swara
 declare vistas.swara ass lgca
 
-! lgca home_view {
+delimiter lgca home_view {
     set logged_in = no -> bin;
     console.print["Bienvenido! Verificando credenciales..."];
     /* Si esta ruta termina en este punto, el router sttr evalúa 'logged_in == no' para saltar a login_view */
@@ -84,7 +84,7 @@ Sub-rutinas aisladas que solo habitan en su ambiente. Sólo se llaman en tiempo 
 ```swara
 declare utils.swara ass fncs
 
-! fncs utilidades {
+delimiter fncs utilidades {
     crte function calcular_iva [precio, pct] {
         set iva = precio * pct -> dec;
         set total = precio + iva -> dec;
@@ -235,7 +235,7 @@ Puedes blindar qué ocurrirá con cada variable posterior a la construcción de 
 ```swara
 declare mis_modelos.swara ass dtta
 
-! dtta esquemas {
+delimiter dtta esquemas {
     form EntidadBase {
         id : num behavior inmutable
         creado_en : txt behavior inmutable
@@ -264,6 +264,6 @@ declare mis_modelos.swara ass dtta
 
 ## 🚀 Resumen Crítico de Construcción (Cheat Sheet)
 1. **Punto y Coma (;):** Absolutamente obligatorio al finalizar rutinas genéricas atómicas (`set`, `update`, `link from`, `update.list`, llamadas directas con array o `loop`).
-2. **Llaves ({ }):** No llevan punto y coma final. Engloban un núcleo o contexto (`! sttr`, operaciones de `if/switch / default`, funciones y layers).
+2. **Llaves ({ }):** No llevan punto y coma final. Engloban un núcleo o contexto (`delimiter sttr`, operaciones de `if/switch / default`, funciones y layers).
 3. **Control del State (Variables perdidas):** Tu enrutador limpia las variables entre un `route` y otro para aliviar la recolección de basura. Todo lo que te importa mantener de un paso a otro lo obligas a fluir en las llaves del envío `inject [mi_var]`.
 4. **Respetar Arquitectura:** Intentar colocar sintaxis `set` a nivel raíz o un `if` dentro del enrutador va a lanzar fatalidades instantáneas de `ARCH LAYER`. Cada archivo debe ceñirse a la capacidad de su marca `.swara ass capa`.
