@@ -285,7 +285,13 @@ update identifiers[1] = "Swap at idx";
 * `update.list[list, new_value];` : Performs an append; adds a value after the last index in the array.
 * `pull.list[list, host_variable];` : Invokes a dynamic `List_Pop` of the last element and saves it into `host_variable`.
 * `size.list[list, measuring_var];` : Measures the length of the entire list and passes it to an existing `measuring_var` variable (of type `num`).
+### Text & List Manipulations (Transformations)
+Crucial to process queries returning from inputs (`ask`) or API responses (`send.petition`). In multiple shapes, they allow unrolling and rolling strings organically.
 
+* `split.txt[variable, separator, dest_list];` : Splits text into segments divided by the given separator and injects them as indexes onto a defined `list` element.
+* `join.list[list, connector, dest_txt];` : Inverse action. Glues the elements back together placing a string connector achieving a joined `txt` sequence.
+* `clean.txt[variable];` : Acts exactly as "trim". Clears trailing and starting blank spaces on your variable re-updating it without manually commanding `update`.
+* `find.txt[source, search, result_bin];` : Verifies if a substring in `search` occurs within a `source`. Stores evaluating truth output boolean `yes` or `no` directly sequentially to `result_bin`.
 ---
 
 ## ⚡ 9. Function Invocation

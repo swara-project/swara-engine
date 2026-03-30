@@ -19,6 +19,12 @@ class Opcode(Enum):
     LIST_GET_INDEX = auto()
     LIST_SET_INDEX = auto()
     
+    # Text Operations
+    TXT_SPLIT = auto()
+    LIST_JOIN = auto()
+    TXT_CLEAN = auto()
+    TXT_FIND = auto()
+    
     # Control de Flujo
     JUMP = auto()
     JUMP_IF_FALSE = auto()
@@ -373,6 +379,24 @@ class swaraBytecodeEngine:
             elif line.startswith("size.list"):
                 match = re.search(r"size\.list\[\s*(\w+)\s*,\s*(\w+)\s*\]", line)
                 if match: bytecode.append((Opcode.LIST_SIZE, match.group(1), match.group(2).strip(), line_num))
+                i += 1
+                
+            # TEXT & LIST TRANSFORMS
+            elif line.startswith("split.txt"):
+                match = re.search(r"split\.txt\[\s*(\w+)\s*,\s*(.*?)\s*,\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.TXT_SPLIT, match.group(1), match.group(2).strip(), match.group(3).strip(), line_num))
+                i += 1
+            elif line.startswith("join.list"):
+                match = re.search(r"join\.list\[\s*(\w+)\s*,\s*(.*?)\s*,\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.LIST_JOIN, match.group(1), match.group(2).strip(), match.group(3).strip(), line_num))
+                i += 1
+            elif line.startswith("clean.txt"):
+                match = re.search(r"clean\.txt\[\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.TXT_CLEAN, match.group(1), line_num))
+                i += 1
+            elif line.startswith("find.txt"):
+                match = re.search(r"find\.txt\[\s*(\w+)\s*,\s*(.*?)\s*,\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.TXT_FIND, match.group(1), match.group(2).strip(), match.group(3).strip(), line_num))
                 i += 1
 
             # IF / ELSE IF / ELSE
@@ -882,6 +906,73 @@ class swaraBytecodeEngine:
                     if lst_name in self.variables and self.variables[lst_name]["type"] == "list":
                         self._enforce_scope(lst_name, line_num)
                         self._register_variable(trg_var, len(self.variables[lst_name]["value"]), "num", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.TXT_SPLIT:
+                    _, txt_var, separator, dest_list_var, _ = instruction
+                    if txt_var in self.variables and self.variables[txt_var]["type"] == "txt":
+                        self._enforce_scope(txt_var, line_num)
+                        val = self.variables[txt_var]["value"]
+                        
+                        sep_clean = separator
+                        if sep_clean in self.variables:
+                            self._enforce_scope(sep_clean, line_num)
+                            sep_clean = str(self.variables[sep_clean]["value"])
+                        else:
+                            sep_clean = sep_clean.strip('"').strip("'")
+                            
+                        result_list = val.split(sep_clean) if sep_clean else list(val)
+                        self._register_variable(dest_list_var, result_list, "list", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.LIST_JOIN:
+                    _, lst_name, connector, dest_txt_var, _ = instruction
+                    if lst_name in self.variables and self.variables[lst_name]["type"] == "list":
+                        self._enforce_scope(lst_name, line_num)
+                        lst = self.variables[lst_name]["value"]
+                        
+                        conn_clean = connector
+                        if conn_clean in self.variables:
+                            self._enforce_scope(conn_clean, line_num)
+                            conn_clean = str(self.variables[conn_clean]["value"])
+                        else:
+                            conn_clean = conn_clean.strip('"').strip("'")
+                            
+                        result_txt = conn_clean.join(str(x) for x in lst)
+                        self._register_variable(dest_txt_var, result_txt, "txt", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.TXT_CLEAN:
+                    _, txt_var, _ = instruction
+                    if txt_var in self.variables and self.variables[txt_var]["type"] == "txt":
+                        self._enforce_scope(txt_var, line_num)
+                        val = self.variables[txt_var]["value"]
+                        self._enforce_mutability_and_warn(
+                            txt_var,
+                            self.variables[txt_var].get("behavior", "mutable"),
+                            self.variables[txt_var].get("derived_from"),
+                            line_num,
+                            expression="CLEAN",
+                            is_init=False
+                        )
+                        self.variables[txt_var]["value"] = val.strip()
+                    pc += 1
+
+                elif opcode == Opcode.TXT_FIND:
+                    _, txt_var, search_str, result_bin, _ = instruction
+                    if txt_var in self.variables and self.variables[txt_var]["type"] == "txt":
+                        self._enforce_scope(txt_var, line_num)
+                        val = self.variables[txt_var]["value"]
+                        
+                        search_clean = search_str
+                        if search_clean in self.variables:
+                            self._enforce_scope(search_clean, line_num)
+                            search_clean = str(self.variables[search_clean]["value"])
+                        else:
+                            search_clean = search_clean.strip('"').strip("'")
+                            
+                        found = "yes" if search_clean in val else "no"
+                        self._register_variable(result_bin, found, "bin", line_num)
                     pc += 1
 
                 elif opcode == Opcode.LIST_GET_INDEX:
