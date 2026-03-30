@@ -42,7 +42,10 @@ class Opcode(Enum):
     JUMP = auto()
     JUMP_IF_FALSE = auto()
     SCHEDULE_TASK = auto()
-    
+
+    # Testing & Debugging
+    ASSERT_TEST = auto()
+
     # Input / Output
     PRINT = auto()
     ASK = auto()
@@ -466,6 +469,12 @@ class swaraBytecodeEngine:
             elif line.startswith("schedule.task"):
                 match = re.search(r"schedule\.task\[\s*(.*?)\s*,\s*(.*?)\s*\]", line)
                 if match: bytecode.append((Opcode.SCHEDULE_TASK, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+
+            # TESTING
+            elif line.startswith("assert.test"):
+                match = re.search(r"assert\.test\[\s*(.*?)\s*,\s*(.*?)\s*\]", line)
+                if match: bytecode.append((Opcode.ASSERT_TEST, match.group(1).strip(), match.group(2).strip(), line_num))
                 i += 1
 
             # IF / ELSE IF / ELSE
@@ -1302,6 +1311,22 @@ class swaraBytecodeEngine:
                         output_val = str(e)
                         
                     self._register_variable(result_txt, output_val.strip(), "txt", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.ASSERT_TEST:
+                    _, condition, error_msg, _ = instruction
+                    # Evaluate condition
+                    is_true = self.evaluate_condition(condition, line_num)
+                    
+                    if not is_true:
+                        msg_clean = error_msg
+                        if msg_clean in self.variables:
+                            self._enforce_scope(msg_clean, line_num)
+                            msg_clean = str(self.variables[msg_clean]["value"])
+                        else:
+                            msg_clean = msg_clean.strip('"\'')
+                        self.error("TEST ASSERTION ERROR", msg_clean, line_num)
+                    
                     pc += 1
 
                 elif opcode == Opcode.LIST_GET_INDEX:
