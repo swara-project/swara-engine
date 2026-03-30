@@ -319,6 +319,12 @@ Swara está confinado en un entorno seguro ("sandbox"). Por seguridad, cualquier
 * `remove.file["ruta_archivo"];` : Borra permanentemente el archivo indicado (o una carpeta siempre que esté vacía).
 * `exec.shell["comando_terminal", salida_txt];` : Actúa como un puente a la terminal nativa del sistema host. Ejecuta el comando y carga el resultado en una variable de tipo `txt` absorbiendo ambas salidas (stdout o stderr).
 
+### Concurrencia y Cron Jobs (Tareas Programadas)
+Si el enrutador `sttr` te brinda la instrucción `fork` para paralelar flujos completos de arquitectura, la capa lógica (`lgca`) provee su propia manera de diferir y programar procesos en formato "Cron Job" utilizando el patrón de ejecución asincrónica nativa sin bloquear tu ruta primaria.
+* `schedule.task["archivo.swara", tiempo];` : Ejecuta un sub-proceso aislado. `tiempo` acepta dos formatos:
+  * **Numérico:** Un retardo expresado en segundos. (Ej: `60` para ejecutar en un minuto).
+  * **Cadena Cron:** Un patrón tipo cron de 5 partes `minuto hora dia_mes mes dia_semana`. (Ej: `"0 8 * * 1"` Ejecutará el `.swara` indicado cada lunes a las 8 AM).
+
 ---
 
 ## ⚡ 9. Invocación de Funciones

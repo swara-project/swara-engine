@@ -318,6 +318,13 @@ Commands that allow environment manipulation, querying folders, listing contents
 * `make.dir["folder_name"];` : Triggers creation of directories inside the current execution path.
 * `remove.file["file_route"];` : Invokes permanent deletion on unneeded files or purposefully empty folders.
 * `exec.shell["terminal_command", txt_output];` : Access tunnel towards the native Host Terminal. Executes the given terminal instruction and extracts output results (`stdout` / `stderr`) strictly populating string format over `txt_output`.
+
+### Concurrency and Cron Jobs (Scheduled Tasks)
+If your `sttr` router grants you architecture-wide parallel execution via `fork`, your `lgca` (Logic layer) handles asynchronous deferring via scheduled process triggers avoiding thread locks on your primary workflow.
+* `schedule.task["target_file.swara", timing];` : Executes an isolated sub-engine. `timing` seamlessly accepts two formats:
+  * **Numeric Literal:** A direct seconds countdown delay. (E.g. `60` executes the task safely after a minute).
+  * **Cron String:** Traditional 5-part cron syntax `minute hour day_of_month month day_of_week`. (E.g. `"0 8 * * 1"` Triggers the execution every Monday entirely autonomously at 8 AM).
+
 ---
 
 ## ⚡ 9. Function Invocation
