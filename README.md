@@ -76,6 +76,19 @@ Provides standard data masking functions to protect sensitive information (PII, 
 - Emails (std.mask.email).
 - Complete hiding (std.mask.hidden).
 
+### 10. `swara_db_lib.py` (Database Interoperability)
+Built-in native support for SQLite databases, bridging standard relational database functionality directly into Swara's memory maps.
+- Tunnel and interface direct persistent connections dynamically onto state variables (`open.db`).
+- Execute transparently robust queries, where results automatically parse down into standard arrays / variables safely within the logic scope boundaries (`exec.db`).
+
+### 11. `swara_server_lib.py` (API Listener)
+Allows Swara to run as a backend server and listen to HTTP requests natively.
+- Boots up gracefully acting as a web server mapped to an execution `route` using `listen.api`.
+- Native RESTful returns and responses using explicit codes directly managed from within logic flows via `reply.api`.
+
+### 12. `swara_html_lib.py` (Interface Translator Engine)
+Bridging Swara cleanly to User Interfaces. Directly interpolate variables from memory or parsed data forms straight into robust HTML architectures seamlessly off `.swara` variables using `fill.html`.
+
 
 python core/swara_cli.py run .
 # OR simply provide the path to your project folder
@@ -115,7 +128,7 @@ The internal virtual machine processes the following opcodes (as defined in `Opc
 - **Variables**: `SET`, `UPDATE`
 - **Lists**: `LIST_APPEND`, `LIST_POP`, `LIST_SIZE`, `LIST_GET_INDEX`, `LIST_SET_INDEX`
 - **Control Flow**: `ROUTE_TRANSITION`, `ORCHESTRATE` (legacy jumping opcodes have been deprecated)
-- **I/O**: `PRINT`, `ASK`, `SEND_PETITION`
+- **I/O & DB**: `PRINT`, `ASK`, `SEND_PETITION`, `OPEN_DB`, `EXEC_DB`, `LISTEN_API`, `REPLY_API`, `FILL_HTML`
 - **Execution**: `CALL_FUNC`, `RETURN`, `ROUTE_TRANSITION`, `NOOP`
 
 ---

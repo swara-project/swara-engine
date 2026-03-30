@@ -31,6 +31,17 @@ class Opcode(Enum):
     # Funciones y Rutas
     CALL_FUNC = auto()
     RETURN = auto()
+    
+    # Base de Datos
+    OPEN_DB = auto()
+    EXEC_DB = auto()
+
+    # Servidor (API)
+    LISTEN_API = auto()
+    REPLY_API = auto()
+
+    # HTML y Vistas
+    FILL_HTML = auto()
 
 
 class _GiveException(Exception):
@@ -279,11 +290,11 @@ class swaraBytecodeEngine:
             self.route_expectations[block_name] = expectations
             
         # Extraemos el contenido de todo el programa (ignorando todo hasta el inicio pero preservando 'link from')
-        # Para que los links externos (link from ...) funcionen, extraemos solo su bloque para las instrucciones a analizar, 
+        # Para que los links externos (link from ...) funcionen, extraemos solo su bloque para las instrucciones a analizar,
         # PERO incluimos los 'link from' explícitamente ya que suelen ir afuera del delimiter.
-        links = "\n".join(re.findall(r"link\s+from\s+.*?;?", code[:delimiter_match.start()]))
+        links = "\n".join(re.findall(r"link\s+from\s+[^;]+;?", code[:delimiter_match.start()]))
         block_content = delimiter_match.group(4)
-        
+
         return links + "\n" + block_content
 
     def get_instructions(self, content):
@@ -346,6 +357,58 @@ class swaraBytecodeEngine:
                 match = re.search(r"console\.print\[(.*)\]", line)
                 if match:
                     bytecode.append((Opcode.PRINT, match.group(1), line_num))
+                i += 1
+                
+            # DATABASE (DB)
+            elif line.startswith("open.db"):
+                match = re.search(r"open\.db\[(.*?),\s*(.*?)\]", line)
+                if match:
+                    ruta = match.group(1).strip()
+                    if ruta.startswith('"') and ruta.endswith('"'):
+                        ruta = ruta[1:-1]
+                    bytecode.append((Opcode.OPEN_DB, ruta, match.group(2).strip(), line_num))
+                i += 1
+
+            elif line.startswith("exec.db"):
+                match = re.search(r"exec\.db\[(.*),\s*(.*),\s*(.*)\]", line)
+                if match:
+                    # because query might have commas, group 1 is connection, group 3 is result. 
+                    # group 1 should not have commas, group 3 should not have commas.
+                    match2 = re.search(r"exec\.db\[([^,]+),\s*(.+),\s*([^,\s]+)\s*\]", line)
+                    if match2:
+                        match = match2
+                    query = match.group(2).strip()
+                    if query.startswith('"') and query.endswith('"'):
+                        query = query[1:-1]
+                    bytecode.append((Opcode.EXEC_DB, match.group(1).strip(), query, match.group(3).strip(), line_num))
+                i += 1
+                
+            # SERVER (API)
+            elif line.startswith("listen.api"):
+                match = re.search(r"listen\.api\[(.*?),\s*(.*?)\]", line)
+                if match:
+                    bytecode.append((Opcode.LISTEN_API, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+
+            elif line.startswith("reply.api"):
+                match = re.search(r"reply\.api\[(.*?),\s*(.*?)\]", line)
+                if match:
+                    bytecode.append((Opcode.REPLY_API, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+
+            # HTML y Vistas
+            elif line.startswith("fill.html"):
+                match = re.search(r"fill\.html\[(.*),\s*(.*),\s*(.*)\]", line)
+                if match:
+                    plantilla = match.group(1).strip()
+                    if plantilla.startswith('"') and plantilla.endswith('"'):
+                        plantilla = plantilla[1:-1]
+                    # we can use the same trick for commas as in exec.db
+                    match2 = re.search(r"fill\.html\[([^,]+),\s*([^,]+),\s*([^,\s]+)\s*\]", line)
+                    if match2:
+                        match = match2
+                        plantilla = match.group(1).strip()
+                    bytecode.append((Opcode.FILL_HTML, plantilla, match.group(2).strip(), match.group(3).strip(), line_num))
                 i += 1
                 
             # UPDATE var = val
@@ -812,6 +875,57 @@ class swaraBytecodeEngine:
                         self.output_handler(self.variables[content]["value"])
                     else:
                         self.output_handler(content.replace('"', ""))
+                    pc += 1
+
+                elif opcode == Opcode.OPEN_DB:
+                    _, ruta, conexion_id, _ = instruction
+                    import swara_db_lib
+                    swara_db_lib.execute_open_db(self, ruta, conexion_id, line_num)
+                    pc += 1
+
+                elif opcode == Opcode.EXEC_DB:
+                    _, conexion_id, query, resultado_list, _ = instruction
+                    import swara_db_lib
+                    swara_db_lib.execute_exec_db(self, conexion_id, query, resultado_list, line_num)
+                    pc += 1
+
+                elif opcode == Opcode.LISTEN_API:
+                    _, port_str, route_name, _ = instruction
+                    port_val = port_str
+                    if port_str in self.variables:
+                        self._enforce_scope(port_str, line_num)
+                        port_val = self.variables[port_str]["value"]
+                    else:
+                        port_val = int(port_val)
+                    import swara_server_lib
+                    swara_server_lib.run_server(self, port_val, route_name, line_num)
+                    pc += 1
+
+                elif opcode == Opcode.REPLY_API:
+                    _, status_code, reply_content, _ = instruction
+                    
+                    code_val = status_code
+                    if status_code in self.variables:
+                        self._enforce_scope(status_code, line_num)
+                        code_val = self.variables[status_code]["value"]
+                    else:
+                        code_val = int(code_val)
+                        
+                    content_val = reply_content
+                    if reply_content in self.variables:
+                        self._enforce_scope(reply_content, line_num)
+                        content_val = self.variables[reply_content]["value"]
+                    elif reply_content.startswith('"') and reply_content.endswith('"'):
+                        content_val = reply_content[1:-1]
+                        
+                    self.variables["sys.api_status"] = {"value": int(code_val), "type": "num"}
+                    self.variables["sys.api_reply"] = {"value": str(content_val), "type": "txt"}
+                    pc += 1
+
+                elif opcode == Opcode.FILL_HTML:
+                    _, plantilla, datos_form, destino_txt, _ = instruction
+                    import swara_html_lib
+                    swara_html_lib.execute_fill_html(self, plantilla, datos_form, destino_txt, line_num)
                     pc += 1
 
                 elif opcode == Opcode.JUMP_IF_FALSE:

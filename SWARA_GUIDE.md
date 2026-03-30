@@ -145,6 +145,45 @@ console.print[variable_name];
 set user_input = ask["Type your answer: "] -> txt;
 ```
 
+**Database Interoperability (SQLite):**
+You can connect and execute queries against SQLite databases natively. Results dynamically map into Swara lists mapping ready variables tightly to the Engine's memory.
+```swara
+// Open tunnel connection or create a local Database file
+open.db["mydatabase.sqlite", my_conn];
+
+// Execute raw SQL commands (INSERT, UPDATE, CREATE, SELECT)
+exec.db[my_conn, "CREATE TABLE users (id INTEGER, name TEXT)", ddl_res];
+exec.db[my_conn, "INSERT INTO users (id, name) VALUES (1, 'Swara')", in_res];
+
+// Perform select queries directly dropping rows directly into Swara's list
+exec.db[my_conn, "SELECT * FROM users", results_list];
+console.print[results_list];
+```
+
+**Network API Listener (Web Server):**
+Swara enables standing up HTTP Web Server nodes that await REST requests directly mapped into logic workflows, handling full backend behavior efficiently.
+```swara
+route my_api_handler {
+    // Deliver RESTful output strictly parsing responses to HTTP Standards
+    reply.api[200, "{\"mensaje\": \"Hola desde Swara API\"}"];
+}
+
+route start {
+    // Boot server binding it implicitly onto a designated sttr route 
+    listen.api[8080, my_api_handler];
+}
+```
+
+**Interface Translator (HTML Renderer):**
+To interact flawlessly with Front-end nodes, generate and serve raw HTML straight out of the runtime box. Using data models parsed off native Forms, dynamically fill template gaps and serve fully formatted website strings immediately mapped into variables.
+```swara
+set my_template = "<h1>Hey {{name}}</h1> <p>Balance: {{balance}}</p>" -> txt;
+// Equivalent alternative pointing to external file: set my_template = "index.html" -> txt;
+
+fill.html[my_template, UserFormData, final_website];
+console.print[final_website];
+```
+
 **Network and Interface Requests (HTTP / Idempotency):** 
 A native command securely connected to our modular HTTP library handling external interoperability. No longer a passive mock, but rather a functional, self-managed requester:
 - It automatically injects an `X-Idempotency-Key` header evaluating the `sys.tx_id` global engine variable (to prevent duplicate payments or operations).
