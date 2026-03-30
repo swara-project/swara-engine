@@ -328,6 +328,14 @@ Si el enrutador `sttr` te brinda la instrucción `fork` para paralelar flujos co
 Swara incorpora primitivas de control de calidad para blindar tus flujos. Ideal para correr conjuntos de test que verifiquen el estado antes de procesar una ruta principal.
 * `assert.test[condicion, "Mensaje de error"];` : Evalúa una condición matemática, booleana o de variables. Si la condición resulta verdadera (`yes`, `True` o validación exitosa), el motor avanza silenciosamente. Si resulta falsa, detonará inmediatamente un `TEST ASSERTION ERROR` abortando la ruta y proveyendo un log riguroso en formato de rastreo indicando el mensaje proporcionado.
   * **Ejemplo**: `assert.test[status == "ok", "El status debe ser ok antes de continuar"];`
+
+### Auditoría Automatizada (Logs de Máquina)
+A diferencia de `console.print` utilizado para depuración humana, el log de auditoría está construido para I/O de máquina robustos, corriendo de forma asíncrona sin bloquear subprocesos.
+* `log.audit["NIVEL", mensaje];` : Emite un formato de trazabilidad riguroso hacia el archivo del framework (`storage/audit.log`).
+  * Autoregistra Fecha (ISO 8601), IP del servidor y el ID de Ejecución Persistente (`sys.tx_id`) garantizando rastreabilidad absoluta.
+  * Incorpora **Enmascaramiento Automático**: Antes de tocar disco, escanea el mensaje por expresiones regulares de correos electrónicos y tarjetas de crédito ocultándolas (Ej. `j***@swara.dev` o `****-****-****-4211`), evitando que datos sensibles escapen a los logs por accidente.
+  * Autoregulado para rotar en copias de respaldo tras superar los 5MB de peso.
+
 ---
 
 ## ⚡ 9. Invocación de Funciones

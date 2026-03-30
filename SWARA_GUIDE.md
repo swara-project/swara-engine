@@ -328,6 +328,14 @@ If your `sttr` router grants you architecture-wide parallel execution via `fork`
 Swara incorporates native testing primitives to shield your workflows. Ideal for running test suites that verify state logic before progressing within a critical route.
 * `assert.test[condition, "Error message"];` : Evaluates a mathematical, boolean, or variable state condition. If it returns true (`yes`, `True`, or a valid logic pass), the engine silently advances. If false, it immediately triggers a `TEST ASSERTION ERROR`, fatally aborting the running path and producing a rigorous tracker log with your custom error message.
   * **Example**: `assert.test[status == "ok", "State must be ok before proceeding"];`
+
+### Automated Audit Logging (Machine I/O)
+While `console.print` is designed for developer debugging, machine-readable audits require non-blocking, heavily structured formats. 
+* `log.audit["LEVEL", message];` : Emits a formatted tracking entry to a rotating system file explicitly (`storage/audit.log`). 
+  * Automatically traces Execution Timestamps, Virtual Server IP, and contextual Runtime ID (`sys.tx_id`). 
+  * Features Built-in Auto-Masking: Any email addresses or credit card numbers detected inside the payload are instantly obfuscated before physically touching the disk, safeguarding compliance passively.
+  * Rotates autonomously over 5MB caps natively.
+
 ---
 
 ## ⚡ 9. Function Invocation

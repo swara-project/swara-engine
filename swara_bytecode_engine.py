@@ -49,6 +49,7 @@ class Opcode(Enum):
     # Input / Output
     PRINT = auto()
     ASK = auto()
+    LOG_AUDIT = auto()
     SEND_PETITION = auto()
     LIMIT_API = auto()
     
@@ -378,6 +379,13 @@ class swaraBytecodeEngine:
                 match = re.search(r"console\.print\[(.*)\]", line)
                 if match:
                     bytecode.append((Opcode.PRINT, match.group(1), line_num))
+                i += 1
+
+            # LOG AUDIT
+            elif line.startswith("log.audit"):
+                match = re.search(r"log\.audit\[\s*(.*?)\s*,\s*(.*?)\s*\]", line)
+                if match:
+                    bytecode.append((Opcode.LOG_AUDIT, match.group(1).strip(), match.group(2).strip(), line_num))
                 i += 1
                 
             # UPDATE var = val
@@ -920,6 +928,57 @@ class swaraBytecodeEngine:
                         self.output_handler(self.variables[content]["value"])
                     else:
                         self.output_handler(content.replace('"', ""))
+                    pc += 1
+
+                elif opcode == Opcode.LOG_AUDIT:
+                    import datetime
+                    import threading
+
+                    _, level, msg, _ = instruction
+                    
+                    # Resolve Level
+                    lvl_clean = level
+                    if lvl_clean in self.variables:
+                        self._enforce_scope(lvl_clean, line_num)
+                        lvl_clean = str(self.variables[lvl_clean]["value"])
+                    else:
+                        lvl_clean = lvl_clean.strip('"\'')
+                        
+                    # Resolve Message
+                    msg_clean = msg
+                    if msg_clean in self.variables:
+                        self._enforce_scope(msg_clean, line_num)
+                        msg_clean = str(self.variables[msg_clean]["value"])
+                    else:
+                        msg_clean = msg_clean.strip('"\'')
+                        
+                    # Auto Masking (Email and Credit Cards)
+                    msg_clean = re.sub(r'([a-zA-Z0-9_.+-])[a-zA-Z0-9_.+-]+@([a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)', r'\1***@\2', msg_clean)
+                    msg_clean = re.sub(r'\b(?:\d[ -]*?){13,16}\b', '****-****-****-****', msg_clean)
+                    
+                    tx_id = self.variables.get("sys.tx_id", {}).get("value", "NO_TX_ID")
+                    ip = "localhost" # Simulado de infraestructura
+                    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    
+                    log_entry = f"[{timestamp}] [{lvl_clean.upper()}] [IP:{ip}] [TX:{tx_id}] -> {msg_clean}\n"
+                    
+                    log_file = self._get_safe_storage_path("audit.log")
+                    
+                    def write_log(entry, filepath):
+                        try:
+                            # Log rotation (5MB)
+                            if os.path.exists(filepath) and os.path.getsize(filepath) > 5 * 1024 * 1024:
+                                backup_path = filepath + f".{int(datetime.datetime.now().timestamp())}.bak"
+                                os.rename(filepath, backup_path)
+                            with open(filepath, 'a', encoding='utf-8') as f:
+                                f.write(entry)
+                        except Exception as e:
+                            print(f"[LOG ERROR] No se pudo escribir log: {e}")
+                            
+                    t_log = threading.Thread(target=write_log, args=(log_entry, log_file))
+                    t_log.daemon = True
+                    t_log.start()
+                    
                     pc += 1
 
                 elif opcode == Opcode.JUMP_IF_FALSE:
