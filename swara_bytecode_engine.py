@@ -29,7 +29,13 @@ class Opcode(Enum):
     FILE_WRITE = auto()
     FILE_READ = auto()
     FILE_CHECK = auto()
-    
+
+    # OS Operations
+    OS_LIST_DIR = auto()
+    OS_MAKE_DIR = auto()
+    OS_REMOVE_FILE = auto()
+    OS_EXEC_SHELL = auto()
+
     # Control de Flujo
     JUMP = auto()
     JUMP_IF_FALSE = auto()
@@ -425,6 +431,24 @@ class swaraBytecodeEngine:
             elif line.startswith("check.file"):
                 match = re.search(r"check\.file\[\s*(.*?)\s*,\s*(\w+)\s*\]", line)
                 if match: bytecode.append((Opcode.FILE_CHECK, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+                
+            # OS Operations
+            elif line.startswith("list.dir"):
+                match = re.search(r"list\.dir\[\s*(.*?)\s*,\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.OS_LIST_DIR, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+            elif line.startswith("make.dir"):
+                match = re.search(r"make\.dir\[\s*(.*?)\s*\]", line)
+                if match: bytecode.append((Opcode.OS_MAKE_DIR, match.group(1).strip(), line_num))
+                i += 1
+            elif line.startswith("remove.file"):
+                match = re.search(r"remove\.file\[\s*(.*?)\s*\]", line)
+                if match: bytecode.append((Opcode.OS_REMOVE_FILE, match.group(1).strip(), line_num))
+                i += 1
+            elif line.startswith("exec.shell"):
+                match = re.search(r"exec\.shell\[\s*(.*?)\s*,\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.OS_EXEC_SHELL, match.group(1).strip(), match.group(2).strip(), line_num))
                 i += 1
 
             # IF / ELSE IF / ELSE
@@ -1056,10 +1080,86 @@ class swaraBytecodeEngine:
                     if path_clean in self.variables:
                         self._enforce_scope(path_clean, line_num)
                         path_clean = str(self.variables[path_clean]["value"])
+                    else:
+                        path_clean = path_clean.strip('"\'')
                         
                     safe_path = self._get_safe_storage_path(path_clean)
                     found = "yes" if os.path.exists(safe_path) else "no"
                     self._register_variable(result_bin, found, "bin", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.OS_LIST_DIR:
+                    _, dirpath, result_list, _ = instruction
+                    path_clean = dirpath
+                    if path_clean in self.variables:
+                        self._enforce_scope(path_clean, line_num)
+                        path_clean = str(self.variables[path_clean]["value"])
+                    else:
+                        path_clean = path_clean.strip('"\'')
+                        
+                    # Podemos usar safe_path si queremos restringirlo al root, pero permitimos os general
+                    safe_path = self._get_safe_storage_path(path_clean)
+                    try:
+                        files = os.listdir(safe_path) if os.path.exists(safe_path) else []
+                    except Exception as e:
+                        self.error("OS ERROR", f"No se pudo listar el directorio {safe_path}: {e}", line_num)
+                        files = []
+                        
+                    self._register_variable(result_list, files, "list", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.OS_MAKE_DIR:
+                    _, dirpath, _ = instruction
+                    path_clean = dirpath
+                    if path_clean in self.variables:
+                        self._enforce_scope(path_clean, line_num)
+                        path_clean = str(self.variables[path_clean]["value"])
+                    else:
+                        path_clean = path_clean.strip('"\'')
+                        
+                    safe_path = self._get_safe_storage_path(path_clean)
+                    try:
+                        os.makedirs(safe_path, exist_ok=True)
+                    except Exception as e:
+                        self.error("OS ERROR", f"No se pudo crear el directorio {safe_path}: {e}", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.OS_REMOVE_FILE:
+                    _, filepath, _ = instruction
+                    path_clean = filepath
+                    if path_clean in self.variables:
+                        self._enforce_scope(path_clean, line_num)
+                        path_clean = str(self.variables[path_clean]["value"])
+                    else:
+                        path_clean = path_clean.strip('"\'')
+                        
+                    safe_path = self._get_safe_storage_path(path_clean)
+                    try:
+                        if os.path.isdir(safe_path):
+                            os.rmdir(safe_path)
+                        elif os.path.exists(safe_path):
+                            os.remove(safe_path)
+                    except Exception as e:
+                        self.error("OS ERROR", f"No se pudo eliminar {safe_path}: {e}", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.OS_EXEC_SHELL:
+                    import subprocess
+                    _, command, result_txt, _ = instruction
+                    cmd_clean = command
+                    if cmd_clean in self.variables:
+                        self._enforce_scope(cmd_clean, line_num)
+                        cmd_clean = str(self.variables[cmd_clean]["value"])
+                    else:
+                        cmd_clean = cmd_clean.strip('"\'')
+                    
+                    try:
+                        result = subprocess.run(cmd_clean, shell=True, capture_output=True, text=True)
+                        output_val = result.stdout if result.stdout else result.stderr
+                    except Exception as e:
+                        output_val = str(e)
+                        
+                    self._register_variable(result_txt, output_val.strip(), "txt", line_num)
                     pc += 1
 
                 elif opcode == Opcode.LIST_GET_INDEX:
