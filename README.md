@@ -70,6 +70,13 @@ Zero-dependency symmetrical encryption core designed to give developers immediat
 Bridging Swara cleanly to external payloads seamlessly with robust validations attached explicitly to the strict native Forms defined in the `dtta` Layer. Throws explicit `SCHEMA ERROR` events, acting completely as an impenetrable boundary for garbage logic attempting to disrupt local VM behaviors.
 - Validate, structure bindings, and generate safe localized JSON translation structures locally utilizing `std.json.parse` or cleanly parsing standard variables utilizing `std.json.serialize`.
 
+### 9. swara_mask_lib.py (Data Obfuscation)
+Provides standard data masking functions to protect sensitive information (PII, PCI-DSS, etc.) before writing it to logs, console output, or checkpoint files (.swchk). This is crucial for maintaining security when using persist.
+- Credit cards (std.mask.credit_card).
+- Emails (std.mask.email).
+- Complete hiding (std.mask.hidden).
+
+
 python core/swara_cli.py run .
 # OR simply provide the path to your project folder
 python core/swara_cli.py run /path/to/project

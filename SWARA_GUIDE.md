@@ -214,6 +214,19 @@ set user = call function std.json.parse[json_string, UserForm] -> UserForm;
 set output_txt = call function std.json.serialize[user] -> txt;
 ```
 
+
+**std.mask (Data Obfuscation):**
+Allows hiding or anonymizing sensitive information (Credit Cards, Emails, or plain text) before it gets saved into the persist; checkpoint files, or before logging it into terminal outputs:
+`swara
+// Mask a credit card (Returns ****-****-****-XXXX)
+set card = call function std.mask.credit_card[data.card] -> txt;
+
+// Mask an email address (Returns a***@domain.com)
+set email = call function std.mask.email[user.email] -> txt;
+
+// Mask completely sensitive text into asterisks
+set hidden = call function std.mask.hidden[pwd] -> txt;
+`
 ---
 
 ## 🔀 6. Control Structures (Conditionals)

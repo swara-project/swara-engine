@@ -214,6 +214,19 @@ set user = call function std.json.parse[json_string, UserForm] -> UserForm;
 set output_txt = call function std.json.serialize[user] -> txt;
 ```
 
+
+**std.mask (Ofuscación de Datos):**
+Permite ocultar o anonimizar información sensible (Tarjetas, Correos, o texto plano) antes de ser guardada en estado persist; o enviada a los logs y consola de impresión:
+`swara
+// Enmascara una tarjeta de crédito (Retorna ****-****-****-XXXX)
+set tarjeta = call function std.mask.credit_card[datos.tarjeta] -> txt;
+
+// Enmascara un correo (Retorna a***@dominio.com)
+set correo = call function std.mask.email[usuario.email] -> txt;
+
+// Enmascara información completa en asteriscos
+set oculto = call function std.mask.hidden[pwd] -> txt;
+`
 ---
 
 ## 🔀 6. Estructuras de Control (Condicionales)

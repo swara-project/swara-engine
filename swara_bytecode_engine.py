@@ -950,6 +950,10 @@ class swaraBytecodeEngine:
                         import swara_json_lib
                         return_val = swara_json_lib.execute_json_function(self, func_name, args_list, line_num)
                         self._register_variable(var_name, return_val, ret_type, line_num)
+                    elif func_name.startswith("std.mask."):
+                        import swara_mask_lib
+                        return_val = swara_mask_lib.execute_mask_function(self, func_name, args_list, line_num)
+                        self._register_variable(var_name, return_val, ret_type, line_num)
                     elif func_name in self.functions:
                         func_data = self.functions[func_name]
                         saved_vars = dict(self.variables) # Backup Scope
