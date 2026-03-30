@@ -358,6 +358,23 @@ Swara está confinado en un entorno seguro ("sandbox"). Por seguridad, cualquier
 * `remove.file["ruta_archivo"];` : Borra permanentemente el archivo indicado (o una carpeta siempre que esté vacía).
 * `exec.shell["comando_terminal", salida_txt];` : Actúa como un puente a la terminal nativa del sistema host. Ejecuta el comando y carga el resultado en una variable de tipo `txt` absorbiendo ambas salidas (stdout o stderr).
 
+### Concurrencia y Cron Jobs (Tareas Programadas)
+Si el enrutador `sttr` te brinda la instrucción `fork` para paralelar flujos completos de arquitectura, la capa lógica (`lgca`) provee su propia manera de diferir y programar procesos en formato "Cron Job" utilizando el patrón de ejecución asincrónica nativa sin bloquear tu ruta primaria.
+* `schedule.task["archivo.swara", tiempo];` : Ejecuta un sub-proceso aislado. `tiempo` acepta dos formatos:
+  * **Numérico:** Un retardo expresado en segundos. (Ej: `60` para ejecutar en un minuto).
+  * **Cadena Cron:** Un patrón tipo cron de 5 partes `minuto hora dia_mes mes dia_semana`. (Ej: `"0 8 * * 1"` Ejecutará el `.swara` indicado cada lunes a las 8 AM).
+### Pruebas Unitarias (Testing y Aseguramiento de Calidad)
+Swara incorpora primitivas de control de calidad para blindar tus flujos. Ideal para correr conjuntos de test que verifiquen el estado antes de procesar una ruta principal.
+* `assert.test[condicion, "Mensaje de error"];` : Evalúa una condición matemática, booleana o de variables. Si la condición resulta verdadera (`yes`, `True` o validación exitosa), el motor avanza silenciosamente. Si resulta falsa, detonará inmediatamente un `TEST ASSERTION ERROR` abortando la ruta y proveyendo un log riguroso en formato de rastreo indicando el mensaje proporcionado.
+  * **Ejemplo**: `assert.test[status == "ok", "El status debe ser ok antes de continuar"];`
+
+### Auditoría Automatizada (Logs de Máquina)
+A diferencia de `console.print` utilizado para depuración humana, el log de auditoría está construido para I/O de máquina robustos, corriendo de forma asíncrona sin bloquear subprocesos.
+* `log.audit["NIVEL", mensaje];` : Emite un formato de trazabilidad riguroso hacia el archivo del framework (`storage/audit.log`).
+  * Autoregistra Fecha (ISO 8601), IP del servidor y el ID de Ejecución Persistente (`sys.tx_id`) garantizando rastreabilidad absoluta.
+  * Incorpora **Enmascaramiento Automático**: Antes de tocar disco, escanea el mensaje por expresiones regulares de correos electrónicos y tarjetas de crédito ocultándolas (Ej. `j***@swara.dev` o `****-****-****-4211`), evitando que datos sensibles escapen a los logs por accidente.
+  * Autoregulado para rotar en copias de respaldo tras superar los 5MB de peso.
+
 ---
 
 ## ⚡ 9. Invocación de Funciones

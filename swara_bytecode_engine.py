@@ -41,10 +41,15 @@ class Opcode(Enum):
     # Control de Flujo
     JUMP = auto()
     JUMP_IF_FALSE = auto()
-    
+    SCHEDULE_TASK = auto()
+
+    # Testing & Debugging
+    ASSERT_TEST = auto()
+
     # Input / Output
     PRINT = auto()
     ASK = auto()
+    LOG_AUDIT = auto()
     SEND_PETITION = auto()
     LIMIT_API = auto()
     
@@ -320,11 +325,7 @@ class swaraBytecodeEngine:
         # Extraemos el contenido de todo el programa (ignorando todo hasta el inicio pero preservando 'link from')
         # Para que los links externos (link from ...) funcionen, extraemos solo su bloque para las instrucciones a analizar,
         # PERO incluimos los 'link from' explícitamente ya que suelen ir afuera del delimiter.
-<<<<<<< HEAD
-        links = "\n".join(re.findall(r"link\s+from\s+[^;]+;?", code[:delimiter_match.start()]))
-=======
         links = "\n".join(re.findall(r"link\s+from\s+[^;\n]+;?", code[:delimiter_match.start()]))
->>>>>>> 72c3e0358540de070cff0ae7243309dcf3fca1ff
         block_content = delimiter_match.group(4)
 
         return links + "\n" + block_content
@@ -389,6 +390,13 @@ class swaraBytecodeEngine:
                 match = re.search(r"console\.print\[(.*)\]", line)
                 if match:
                     bytecode.append((Opcode.PRINT, match.group(1), line_num))
+                i += 1
+
+            # LOG AUDIT
+            elif line.startswith("log.audit"):
+                match = re.search(r"log\.audit\[\s*(.*?)\s*,\s*(.*?)\s*\]", line)
+                if match:
+                    bytecode.append((Opcode.LOG_AUDIT, match.group(1).strip(), match.group(2).strip(), line_num))
                 i += 1
                 
             # DATABASE (DB)
@@ -526,6 +534,18 @@ class swaraBytecodeEngine:
             elif line.startswith("exec.shell"):
                 match = re.search(r"exec\.shell\[\s*(.*?)\s*,\s*(\w+)\s*\]", line)
                 if match: bytecode.append((Opcode.OS_EXEC_SHELL, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+
+            # CONCURRENCIA
+            elif line.startswith("schedule.task"):
+                match = re.search(r"schedule\.task\[\s*(.*?)\s*,\s*(.*?)\s*\]", line)
+                if match: bytecode.append((Opcode.SCHEDULE_TASK, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+
+            # TESTING
+            elif line.startswith("assert.test"):
+                match = re.search(r"assert\.test\[\s*(.*?)\s*,\s*(.*?)\s*\]", line)
+                if match: bytecode.append((Opcode.ASSERT_TEST, match.group(1).strip(), match.group(2).strip(), line_num))
                 i += 1
 
             # IF / ELSE IF / ELSE
@@ -1318,6 +1338,84 @@ class swaraBytecodeEngine:
                         self.error("OS ERROR", f"No se pudo eliminar {safe_path}: {e}", line_num)
                     pc += 1
 
+                elif opcode == Opcode.SCHEDULE_TASK:
+                    import threading
+                    import datetime
+                    import time
+                    _, target_file, schedule_timing, _ = instruction
+                    
+                    target_clean = target_file
+                    if target_clean in self.variables:
+                        self._enforce_scope(target_clean, line_num)
+                        target_clean = str(self.variables[target_clean]["value"])
+                    else:
+                        target_clean = target_clean.strip('"\'')
+                        
+                    timing_clean = schedule_timing
+                    if timing_clean in self.variables:
+                        self._enforce_scope(timing_clean, line_num)
+                        timing_clean = str(self.variables[timing_clean]["value"])
+                    else:
+                        timing_clean = timing_clean.strip('"\'')
+
+                    # Helper para correr la tarea aisladamente
+                    def run_scheduled_job():
+                        # Engine clone para evitar colisiones
+                        job_engine = swaraBytecodeEngine()
+                        job_code = job_engine.load_file(target_clean)
+                        if job_code:
+                            try:
+                                job_engine.run(job_code)
+                            except Exception as e:
+                                print(f"[CRON JOB ERROR] Failed in '{target_clean}': {e}")
+                        else:
+                            print(f"[CRON WARNING] '{target_clean}' no encontrado.")
+                            
+                    is_numeric = False
+                    try:
+                        delay_secs = float(timing_clean)
+                        is_numeric = True
+                    except ValueError:
+                        pass
+                        
+                    if is_numeric:
+                        # Delay de unica vez (Timer)
+                        t = threading.Timer(delay_secs, run_scheduled_job)
+                        t.daemon = True
+                        t.start()
+                    else:
+                        # Cron Job loop (min hour day mon dow)
+                        def cron_loop():
+                            parts = timing_clean.split()
+                            if len(parts) != 5:
+                                # Fallback por si la expresion cron es invalida
+                                print(f"[CRON ERROR] Patrón cron inválido '{timing_clean}'. Usa 'min h d m dow'.")
+                                return
+                                
+                            while True:
+                                now = datetime.datetime.now()
+                                match_min = parts[0] == "*" or str(now.minute) == parts[0]
+                                match_hr = parts[1] == "*" or str(now.hour) == parts[1]
+                                match_day = parts[2] == "*" or str(now.day) == parts[2]
+                                match_mon = parts[3] == "*" or str(now.month) == parts[3]
+                                # Python datetime is 0=Mon, 6=Sun. Cron normally is 0=Sun. 
+                                # Si asume estandar: adaptamos dow simple, Python weekday() a string
+                                match_dow = parts[4] == "*" or str(now.isoweekday() + 1 if now.isoweekday() < 7 else 0) == parts[4] or str(now.weekday()) == parts[4]
+                                
+                                if match_min and match_hr and match_day and match_mon and match_dow:
+                                    t_run = threading.Thread(target=run_scheduled_job)
+                                    t_run.daemon = True
+                                    t_run.start()
+                                    time.sleep(60) # Pausa de 1m para prevenir multiple firing en el mismo minuto
+                                else:
+                                    time.sleep(15) # Revisar cada 15 segundos
+                                    
+                        c_t = threading.Thread(target=cron_loop)
+                        c_t.daemon = True
+                        c_t.start()
+                        
+                    pc += 1
+
                 elif opcode == Opcode.OS_EXEC_SHELL:
                     import subprocess
                     _, command, result_txt, _ = instruction
@@ -1335,6 +1433,22 @@ class swaraBytecodeEngine:
                         output_val = str(e)
                         
                     self._register_variable(result_txt, output_val.strip(), "txt", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.ASSERT_TEST:
+                    _, condition, error_msg, _ = instruction
+                    # Evaluate condition
+                    is_true = self.evaluate_condition(condition, line_num)
+                    
+                    if not is_true:
+                        msg_clean = error_msg
+                        if msg_clean in self.variables:
+                            self._enforce_scope(msg_clean, line_num)
+                            msg_clean = str(self.variables[msg_clean]["value"])
+                        else:
+                            msg_clean = msg_clean.strip('"\'')
+                        self.error("TEST ASSERTION ERROR", msg_clean, line_num)
+                    
                     pc += 1
 
                 elif opcode == Opcode.LIST_GET_INDEX:
