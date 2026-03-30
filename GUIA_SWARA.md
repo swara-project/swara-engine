@@ -286,6 +286,14 @@ update identificadores[1] = "Intercambio en idx";
 * `pull.list[lista, variable_huesped];` : Invoca un `List_Pop` del último elemento dinámicamente y lo graba en `variable_huesped`.
 * `size.list[lista, var_medidora];` : Mide el tamaño de toda la lista y lo pasa a una variable pre-definida `var_medidora` (tipo `num`).
 
+### Manipulación de Texto y Listas (Transformaciones)
+Esencial para procesar cadenas provenientes de inputs (`ask`) o retornos (`send.petition`). En sus variadas formas, permiten desarmar y rearmar variables de texto orgánicamente.
+
+* `split.txt[variable, separador, destino_list];` : Divide un texto en partes pasadas por el separador y las inserta como elementos en una lista predefinida.
+* `join.list[lista, conector, destino_txt];` : Inverso del anterior. Une los elementos de una lista utilizando un string conector logrando un texto único.
+* `clean.txt[variable];` : Realiza un "trim". Elimina espacios vacíos al inicio y al final de tu variable mutando sin que debas reescribir `update`.
+* `find.txt[fuente, busqueda, resultado_bin];` : Busca si una palabra en `busqueda` existe dentro de `fuente` devolviendo el booleano en `resultado_bin`.
+
 ---
 
 ## ⚡ 9. Invocación de Funciones
