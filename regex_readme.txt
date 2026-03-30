@@ -1,0 +1,1 @@
+- Full stream cipher symmetrical text base64 obfuscation

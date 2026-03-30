@@ -204,6 +204,16 @@ set cifrado = call function std.crypto.encrypt[variable_privada, "PASSWORD123"] 
 set desencriptado = call function std.crypto.decrypt[cifrado, "PASSWORD123"] -> txt;
 ```
 
+**std.json (El Traductor Universal):**
+Si Swara va a hablar con el mundo (vía redes o archivos), necesita manejar JSON como un rey sin perder el tipado. Convierte y valida estructuras desde y hacia los `molds` (forms) de la capa `dtta`.
+```swara
+// Convierte texto JSON en un Form validado (Lanza SCHEMA ERROR si el JSON trae un campo extra o falta uno obligatorio)
+set user = call function std.json.parse[json_string, UserForm] -> UserForm;
+
+// Transforma el estado interno de un Form en texto plano JSON
+set output_txt = call function std.json.serialize[user] -> txt;
+```
+
 ---
 
 ## 🔀 6. Estructuras de Control (Condicionales)

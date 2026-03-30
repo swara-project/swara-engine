@@ -66,12 +66,10 @@ Zero-dependency symmetrical encryption core designed to give developers immediat
 - Shared-key HMAC-SHA-256 Payload signing ensuring microservice routing trust mechanisms with `std.crypto.sign`.
 - Full stream cipher symmetrical text base64 obfuscation (`std.crypto.encrypt`, `std.crypto.decrypt`).
 
-## 🚀 CLI Usage
+### 8. `swara_json_lib.py` (Universal Translator)
+Bridging Swara cleanly to external payloads seamlessly with robust validations attached explicitly to the strict native Forms defined in the `dtta` Layer. Throws explicit `SCHEMA ERROR` events, acting completely as an impenetrable boundary for garbage logic attempting to disrupt local VM behaviors.
+- Validate, structure bindings, and generate safe localized JSON translation structures locally utilizing `std.json.parse` or cleanly parsing standard variables utilizing `std.json.serialize`.
 
-You can run the engine directly from your terminal using Python.
-
-### Run a Workspace
-```bash
 python core/swara_cli.py run .
 # OR simply provide the path to your project folder
 python core/swara_cli.py run /path/to/project

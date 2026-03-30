@@ -1,0 +1,22 @@
+declare dtta.swara ass dtta {
+    crte form UserForm {
+        name -> txt,
+        age -> num
+    }
+}
+
+declare app.swara ass lgca {
+    link from dtta -> dtta.swara;
+    
+    set jsonStr = "{\"name\": \"Alice\", \"age\": 30}" -> txt;
+    set parsedUser = std.json.parse[jsonStr, UserForm] -> UserForm;
+    console.print[parsedUser];
+    
+    set serialized = std.json.serialize[parsedUser] -> txt;
+    console.print[serialized];
+}
+
+declare sttr.swara ass sttr {
+    link from lgca -> app.swara;
+    entry_point -> app.swara;
+}

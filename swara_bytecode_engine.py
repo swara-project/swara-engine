@@ -946,6 +946,10 @@ class swaraBytecodeEngine:
                         import swara_crypto_lib
                         return_val = swara_crypto_lib.execute_crypto_function(self, func_name, args_list, line_num)
                         self._register_variable(var_name, return_val, ret_type, line_num)
+                    elif func_name.startswith("std.json."):
+                        import swara_json_lib
+                        return_val = swara_json_lib.execute_json_function(self, func_name, args_list, line_num)
+                        self._register_variable(var_name, return_val, ret_type, line_num)
                     elif func_name in self.functions:
                         func_data = self.functions[func_name]
                         saved_vars = dict(self.variables) # Backup Scope

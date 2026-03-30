@@ -204,6 +204,16 @@ set cyphered = call function std.crypto.encrypt[private_variable, "PASSWORD123"]
 set decrypted = call function std.crypto.decrypt[cyphered, "PASSWORD123"] -> txt;
 ```
 
+**std.json (The Universal Translator):**
+If Swara is meant to communicate with the world, it needs to handle JSON gracefully without sacrificing strong typing. Converts explicitly to and from data structures (Forms defined in the `dtta` layer).
+```swara
+// Parse JSON text into a validated Form (Throws a SCHEMA ERROR if there is a missing or extra field in the JSON)
+set user = call function std.json.parse[json_string, UserForm] -> UserForm;
+
+// Transform a fully evaluated local Form into a plain JSON string
+set output_txt = call function std.json.serialize[user] -> txt;
+```
+
 ---
 
 ## 🔀 6. Control Structures (Conditionals)
