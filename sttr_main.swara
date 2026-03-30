@@ -1,6 +1,0 @@
-declare sttr_main.swara ass sttr 
-link from lgca -> main.swara;
-
-delimiter sttr orquestador {
-    entry_point -> prueba_mask;
-}

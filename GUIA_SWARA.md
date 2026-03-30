@@ -145,6 +145,45 @@ console.print[nombre_variable];
 set input_user = ask["Escribe tu respuesta: "] -> txt;
 ```
 
+**Interacción con Bases de Datos (SQLite):**
+Puedes conectarte y ejecutar consultas en bases de datos SQLite nativamente, y los resultados se mapean automáticamente a una lista en la memoria de Swara.
+```swara
+// Abrir conexión o crear archivo de Base de Datos
+open.db["midatabase.sqlite", my_conn];
+
+// Ejecutar comandos SQL (INSERT, UPDATE, CREATE, SELECT)
+exec.db[my_conn, "CREATE TABLE usuarios (id INTEGER, nombre TEXT)", ddl_res];
+exec.db[my_conn, "INSERT INTO usuarios (id, nombre) VALUES (1, 'Swara')", in_res];
+
+// Realizar consultas y guardar resultados en una lista o matriz de Swara
+exec.db[my_conn, "SELECT * FROM usuarios", selected_data_list];
+console.print[selected_data_list];
+```
+
+**Escuchador de Red (Servidor API):**
+Swara no solo te permite enviar datos y guardarlos, ahora te permite recibirlos en vivo desde otros lados actuando como una API en el lado de Servidor con tan solo dos comandos.
+```swara
+route my_api_handler {
+    // Escupir el resultado de frente (ej. un JSON con estado 200 HTTP)
+    reply.api[200, "{\"mensaje\": \"Hola desde Swara API\"}"];
+}
+
+route start {
+    // Despierta el servidor y enruta TODAS las conexiones a una funcion en sttr/lgca
+    listen.api[8080, my_api_handler];
+}
+```
+
+**Traductor de Interfaz (Render HTML):**
+Para interactuar con el Front-end también puedes generar y servir HTML directamente desde el motor usando `fill.html`. Puedes insertar los datos que tengas guardados en Forms nativos o variables del sistema directamente en los huecos de la plantilla.
+```swara
+set mi_plantilla = "<h1>Hola {{nombre}}</h1> <p>Tu saldo es: {{saldo}}</p>" -> txt;
+// O también abrir archivo directo: set mi_plantilla = "index.html" -> txt;
+
+fill.html[mi_plantilla, UsuarioFormData, mi_web_resultante];
+console.print[mi_web_resultante];
+```
+
 **Peticiones de Red e Interfaces (Network / Idempotencia):** 
 Una orden nativa conectada a nuestra librería HTTP modular para interactuar con microservicios. A diferencia de un envío mock, es funcional y auto-gestionada:
 - Envía automáticamente un header `X-Idempotency-Key` basado en la variable global del motor `sys.tx_id` (para evitar transacciones o pagos duplicados).
