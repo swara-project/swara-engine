@@ -303,9 +303,21 @@ Crucial to process queries returning from inputs (`ask`) or API responses (`send
 ### File System Operations (Disk Management)
 Swara incorporates file boundaries using "sandbox" principles. To protect your disks maliciously, reading and writing files is forcibly contained down to an automatically created `/storage` sub-directory near the engine runtime execution folder.
 
+#### Text Files
 * `write.file["filepath.txt", content];` : Dumps a variable string or explicitly declared raw text generating/overwriting the indicated target (Ex. `records.txt` writes physically on `storage/records.txt`).
 * `read.file["filepath.txt", dest_var];` : Engages a disk read operation, finding the target matching inside `/storage` depositing raw string contents inside an existing `txt` `dest_var`.
 * `check.file["filepath.txt", bin_var];` : Quietly reviews file existence before crashing your workflow in a standard read, feeding your `bin_var` with logical existence verification result.
+
+#### Binary Files (Base64)
+* `read.bin["image_path.png", b64_dest_var];` : Reads a binary file (such as images or PDFs) converting its raw bytes encoding into a Base64 formatted string, enabling seamless textual manipulation.
+* `write.bin["copy_path.png", b64_var];` : Receives a valid Base64 string from your environment variables and cleanly recreates a functioning binary file to disk avoiding byte corruption.
+
+### Operating System Interaction (OS & Directories)
+Commands that allow environment manipulation, querying folders, listing contents, and providing a gateway to sub-shell calls:
+* `list.dir["folder_path", dest_list_var];` : Scans the requested folder translating inner files/directories identifiers into an array mapping towards your `dest_list_var` (type `list`).
+* `make.dir["folder_name"];` : Triggers creation of directories inside the current execution path.
+* `remove.file["file_route"];` : Invokes permanent deletion on unneeded files or purposefully empty folders.
+* `exec.shell["terminal_command", txt_output];` : Access tunnel towards the native Host Terminal. Executes the given terminal instruction and extracts output results (`stdout` / `stderr`) strictly populating string format over `txt_output`.
 ---
 
 ## ⚡ 9. Function Invocation

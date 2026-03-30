@@ -29,6 +29,8 @@ class Opcode(Enum):
     FILE_WRITE = auto()
     FILE_READ = auto()
     FILE_CHECK = auto()
+    BIN_READ = auto()
+    BIN_WRITE = auto()
 
     # OS Operations
     OS_LIST_DIR = auto()
@@ -431,6 +433,14 @@ class swaraBytecodeEngine:
             elif line.startswith("check.file"):
                 match = re.search(r"check\.file\[\s*(.*?)\s*,\s*(\w+)\s*\]", line)
                 if match: bytecode.append((Opcode.FILE_CHECK, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+            elif line.startswith("write.bin"):
+                match = re.search(r"write\.bin\[\s*(.*?)\s*,\s*(.*?)\s*\]", line)
+                if match: bytecode.append((Opcode.BIN_WRITE, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+            elif line.startswith("read.bin"):
+                match = re.search(r"read\.bin\[\s*(.*?)\s*,\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.BIN_READ, match.group(1).strip(), match.group(2).strip(), line_num))
                 i += 1
                 
             # OS Operations
@@ -1086,6 +1096,53 @@ class swaraBytecodeEngine:
                     safe_path = self._get_safe_storage_path(path_clean)
                     found = "yes" if os.path.exists(safe_path) else "no"
                     self._register_variable(result_bin, found, "bin", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.BIN_READ:
+                    import base64
+                    _, filepath, var_name, _ = instruction
+                    path_clean = filepath
+                    if path_clean in self.variables:
+                        self._enforce_scope(path_clean, line_num)
+                        path_clean = str(self.variables[path_clean]["value"])
+                    else:
+                        path_clean = path_clean.strip('"\'')
+                        
+                    safe_path = self._get_safe_storage_path(path_clean)
+                    try:
+                        with open(safe_path, 'rb') as f:
+                            content = f.read()
+                        b64_content = base64.b64encode(content).decode('utf-8')
+                        self._register_variable(var_name, b64_content, "txt", line_num)
+                    except Exception as e:
+                        self.error("FILE READ ERROR", f"Failed to read binary file {safe_path}: {str(e)}", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.BIN_WRITE:
+                    import base64
+                    _, filepath, content_expr, _ = instruction
+                    path_clean = filepath
+                    if path_clean in self.variables:
+                        self._enforce_scope(path_clean, line_num)
+                        path_clean = str(self.variables[path_clean]["value"])
+                    else:
+                        path_clean = path_clean.strip('"\'')
+                        
+                    b64_content = content_expr
+                    if b64_content in self.variables:
+                        self._enforce_scope(b64_content, line_num)
+                        b64_content = str(self.variables[b64_content]["value"])
+                    else:
+                        b64_content = b64_content.strip('"\'')
+
+                    safe_path = self._get_safe_storage_path(path_clean)
+                    try:
+                        raw_data = base64.b64decode(b64_content)
+                        os.makedirs(os.path.dirname(safe_path) or '.', exist_ok=True)
+                        with open(safe_path, 'wb') as f:
+                            f.write(raw_data)
+                    except Exception as e:
+                        self.error("FILE WRITE ERROR", f"Failed to write binary file {safe_path}: {str(e)}", line_num)
                     pc += 1
 
                 elif opcode == Opcode.OS_LIST_DIR:
