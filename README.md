@@ -26,13 +26,13 @@ Failure to respect layer boundaries instantly raises a `Layer Architecture Error
 
 ## 🧠 Core Components
 
-The Core module processes and executes swara projects. It consists of three primary modules:
+The Core module processes and executes swara projects. It consists of four primary modules:
 
 ### 1. `swara_cli.py` (Command-Line Interface)
 The entry point for executing scripts. It provides the terminal commands needed to trigger the runtime execution. It accepts paths either to an entire workspace (directory) or directly to a single `.swara` file.
 
 ### 2. `swara_runtime.py` (Runtime Environment)
-The `swaraRuntime` wrapper prepares the execution context. 
+The `swaraRuntime` wrapper prepares the execution context.
 - It attempts to find the application's `entry_point` inside any `.swara` file declared as `ass sttr`.
 - Fallbacks to looking for a base `ass lgca` logic file if no structural map is found.
 - Instances the engine, handles I/O attachments, and loads the target execution buffer.
@@ -44,7 +44,27 @@ The core evaluator (`swaraBytecodeEngine`). It handles:
 - **Control Flow:** Computes centralized route orchestrations and calls (`CALL_FUNC`). Direct jumping opcodes have been replaced entirely by the centralized Orchestration Pattern.
 - **Memory Maps:** Maintains dictionaries for localized variables (`num`, `dec`, `txt`, `bin`, `list`, `empty`), data models (`forms`), and registered functions.
 
----
+### 4. `swara_http_lib.py` (Native Network Subsystem)
+Modular library handling external microservices interoperability decoupled from the main engine (`send.petition`). Unifies external interactions under Swara context standards:
+- **Idempotency checks** mapped automatically against `sys.tx_id`.
+- Factory **Exponential Backoff** automatic retries on 500s limits.
+- On-the-fly **Data Mapping** natively matching inbound JSON structures cleanly to `dtta` layer forms seamlessly returning `sys.last_response`.
+
+### 5. `swara_time_lib.py` (Native Time Guardian)
+Built-in internal library decoupled from the engine handling time manipulations and executions, providing route diagnostics.
+- Includes precision sleep timeouts via `std.time.delay`.
+- Complete date extraction, format standardizations (`strftime` standardizing), and differential parsing for chronometers natively.
+
+### 6. `swara_math_lib.py` (Native Precision Calculus)
+Built-in module designed primarily to address finance and IoT analytics without forcing standard global variables into unsafe states.
+- Currency safety handling (`std.math.round`).
+- Analytics extraction directly off variables or dynamic list structures (`std.math.sum`, `std.math.mean`, `std.math.min`, `std.math.max`, `std.math.abs`).
+
+### 7. `swara_crypto_lib.py` (Native Bouncer Subsystem)
+Zero-dependency symmetrical encryption core designed to give developers immediate security over networking payloads. Evaluates standard robust cryptographic patterns completely separated from the VM.
+- Data hashing directly onto single state values via `std.crypto.hash` with standard SHA-256. 
+- Shared-key HMAC-SHA-256 Payload signing ensuring microservice routing trust mechanisms with `std.crypto.sign`.
+- Full stream cipher symmetrical text base64 obfuscation (`std.crypto.encrypt`, `std.crypto.decrypt`).
 
 ## 🚀 CLI Usage
 

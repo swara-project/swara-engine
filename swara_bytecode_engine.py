@@ -317,7 +317,9 @@ class swaraBytecodeEngine:
                     match = re.search(r"set\s+(\w+)\s*=\s*call function\s+([\w\.]+)\[(.*)\]\s*->\s*(\w+)", line)
                     if match:
                         var_name = match.group(1)
-                        func_name = match.group(2).split(".")[-1] # Ignorar alias de capa p.ej. fncs.
+                        # Preservar el módulo std puro, de lo contrario limpiar como fncs.
+                        f_raw = match.group(2)
+                        func_name = f_raw if f_raw.startswith("std.") else f_raw.split(".")[-1]
                         args = [arg.strip() for arg in match.group(3).split(",") if arg.strip()]
                         ret_type = match.group(4)
                         # We push args to operand stack or keep them in instruction
@@ -511,14 +513,14 @@ class swaraBytecodeEngine:
                 assign_match = re.search(r"set\s+(\w+)\s*=\s*call function\s+([\w\.]+)\[(.*)\]\s*->\s*(\w+)", line)
                 if assign_match:
                     var_name, func_name_raw, args_str, ret_type = assign_match.groups()
-                    func_name = func_name_raw.split(".")[-1]
+                    func_name = func_name_raw if func_name_raw.startswith("std.") else func_name_raw.split(".")[-1]
                     args_list = [a.strip() for a in args_str.split(",") if a.strip()]
                     bytecode.append((Opcode.CALL_FUNC, var_name, func_name, args_list, ret_type, line_num))
                 else:
                     direct_match = re.search(r"call function\s+([\w\.]+)\[(.*)\]\s*->\s*(\w+)", line)
                     if direct_match:
                         func_name_raw, args_str, ret_type = direct_match.groups()
-                        func_name = func_name_raw.split(".")[-1]
+                        func_name = func_name_raw if func_name_raw.startswith("std.") else func_name_raw.split(".")[-1]
                         args_list = [a.strip() for a in args_str.split(",") if a.strip()]
                         discard_var = f"_discard_{line_num}"
                         bytecode.append((Opcode.CALL_FUNC, discard_var, func_name, args_list, ret_type, line_num))
@@ -931,8 +933,20 @@ class swaraBytecodeEngine:
 
                 elif opcode == Opcode.CALL_FUNC:
                     _, var_name, func_name, args_list, ret_type, _ = instruction
-                    
-                    if func_name in self.functions:
+
+                    if func_name.startswith("std.time."):
+                        import swara_time_lib
+                        return_val = swara_time_lib.execute_time_function(self, func_name, args_list, line_num)
+                        self._register_variable(var_name, return_val, ret_type, line_num)
+                    elif func_name.startswith("std.math."):
+                        import swara_math_lib
+                        return_val = swara_math_lib.execute_math_function(self, func_name, args_list, line_num)
+                        self._register_variable(var_name, return_val, ret_type, line_num)
+                    elif func_name.startswith("std.crypto."):
+                        import swara_crypto_lib
+                        return_val = swara_crypto_lib.execute_crypto_function(self, func_name, args_list, line_num)
+                        self._register_variable(var_name, return_val, ret_type, line_num)
+                    elif func_name in self.functions:
                         func_data = self.functions[func_name]
                         saved_vars = dict(self.variables) # Backup Scope
                         
@@ -947,9 +961,8 @@ class swaraBytecodeEngine:
                         return_val = self.run_vm(func_data["bytecode"], is_function=True)
                         self.variables = saved_vars # Restore Scope
                         self._register_variable(var_name, return_val, ret_type, line_num)
-                    pc += 1
-
-                elif opcode == Opcode.RETURN:
+                    else:
+                        self.error("REFERENCE ERROR", f"La función '{func_name}' no existe o no ha sido importada.", line_num)
                     _, val, _ = instruction
                     ret_val = val
                     if val in self.variables: 
@@ -967,7 +980,25 @@ class swaraBytecodeEngine:
                         payload = self.variables[content]["value"]
                     else:
                         payload = content
-                    self.output_handler(f"[NETWORK MOCK]: Sending petition -> {payload}")
+                    
+                    # Llamada a librería nativa (Capa fncs)
+                    import swara_http_lib
+                    
+                    # Intentar obtener información extra si es un dict/form
+                    dtta_form_target = None
+                    if isinstance(payload, dict) and "target_form" in payload:
+                        dtta_form_target = payload.pop("target_form")
+                        
+                    result = swara_http_lib.envia_peticion(self, str(payload), payload, dtta_form_target, line_num)
+                    
+                    # Asignar a variable de sistema si devuelve respuesta 
+                    if result:
+                        if isinstance(result, dict) and "type" in result:
+                            self.variables["sys.last_response"] = result
+                        else:
+                            self.variables["sys.last_response"] = {"value": result, "type": "txt"}
+
+                    self.output_handler(f"[NETWORK]: Petition sent -> {payload}")
                     pc += 1
 
 

@@ -145,11 +145,63 @@ console.print[nombre_variable];
 set input_user = ask["Escribe tu respuesta: "] -> txt;
 ```
 
-**Peticiones de Red e Interfaces (Mocking / Network):** 
-Una orden pasiva para generar envíos (ideal para micro-servicios y mock API outputs):
+**Peticiones de Red e Interfaces (Network / Idempotencia):** 
+Una orden nativa conectada a nuestra librería HTTP modular para interactuar con microservicios. A diferencia de un envío mock, es funcional y auto-gestionada:
+- Envía automáticamente un header `X-Idempotency-Key` basado en la variable global del motor `sys.tx_id` (para evitar transacciones o pagos duplicados).
+- Maneja control de códigos de estado de fábrica:
+  - **HTTP 200**: Parseo del JSON de respuesta directo a estado nativo Swara. Devuelve el resultado por defecto a la variable `sys.last_response`.
+  - **HTTP 400/404**: Desencadena falla cratérica nativa del motor indicando `NETWORK ERROR`.
+  - **HTTP >= 500**: La librería implementa sistema de reintentos automático (*Exponential Backoff*, hasta 3 reintentos) de forma modular.
+- Puede parsear automáticamente respuestas JSON y emparejarlas con los esquemas de tus moldes `form` de la capa `dtta`, validando y creando una estructura idéntica dentro del motor si así lo requieres.
+
 ```swara
 send.petition["http://api.datos.mock.com/info"];
 send.petition[variable_o_payload];
+```
+
+**std.time (El Guardián del Tiempo):**
+Módulo nativo diseñado para medir cuánto tiempo pasa entre rutas, auditar eventos y gestionar flujos de espera de manera segura.
+```swara
+// Otener fecha/hora actual (ISO 8601)
+set inicio = call function std.time.now[] -> txt;
+
+// Añadir un delay/sleep seguro de ejecucion (e.g., 2.5 segundos)
+call function std.time.delay[2.5] -> empty;
+
+// Comparar fechas (retorna diferencia en segundos)
+set diff = call function std.time.compare[fecha_fin, fecha_inicio] -> num;
+
+// Formatear un timestamp (sintaxis strftime)
+set log_date = call function std.time.format[inicio, "%Y-%m-%d"] -> txt;
+```
+
+**std.math (Cálculo de Precisión):**
+Ideal para Finanzas o IoT. Proporciona redondeos, estadísticas o transformaciones analíticas con precisión sin corromper el scope global del motor:
+```swara
+// Redondeo de moneda o precision (ej: a 2 decimales)
+set formato_precio = call function std.math.round[12.34567, 2] -> dec;
+
+// Valor absoluto
+set absoluto = call function std.math.abs[-50] -> num;
+
+// Operaciones de listas / estadísticas 
+set total = call function std.math.sum[lista_precios] -> dec;
+set promedio = call function std.math.mean[lista_temperaturas] -> dec;
+set maximo = call function std.math.max[lista_mediciones] -> num;
+```
+
+**std.crypto (La Bóveda):**
+El guardián de la seguridad en Swara. Ideal para proteger payload signatures y firmar la integridad de los datos evitando alteraciones.
+```swara
+// Hashear variables o texto de forma destructiva (SHA-256)
+set checksum_data = call function std.crypto.hash[mi_variable] -> txt;
+
+// Firmar integridad del mensaje con una llave compartida (HMAC-SHA-256)
+set firma = call function std.crypto.sign[cuerpo_mensaje, "LLAVE_SECRETA"] -> txt;
+
+// Ciframiento simétrico para variables privadas
+set cifrado = call function std.crypto.encrypt[variable_privada, "PASSWORD123"] -> txt;
+set desencriptado = call function std.crypto.decrypt[cifrado, "PASSWORD123"] -> txt;
 ```
 
 ---

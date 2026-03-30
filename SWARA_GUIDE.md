@@ -145,11 +145,63 @@ console.print[variable_name];
 set user_input = ask["Type your answer: "] -> txt;
 ```
 
-**Network and Interface Requests (Mocking / Network):** 
-A passive order to generate payload sending (ideal for micro-services and mock API outputs):
+**Network and Interface Requests (HTTP / Idempotency):** 
+A native command securely connected to our modular HTTP library handling external interoperability. No longer a passive mock, but rather a functional, self-managed requester:
+- It automatically injects an `X-Idempotency-Key` header evaluating the `sys.tx_id` global engine variable (to prevent duplicate payments or operations).
+- Factory-level status code control:
+  - **HTTP 200**: Parses the JSON response gracefully to Swara's native engine mapping, dropping the result inside the `sys.last_response` default variable.
+  - **HTTP 400/404**: Instantly throws a crateric native `NETWORK ERROR`.
+  - **HTTP >= 500**: The library independently implements a retry system under the hood (*Exponential Backoff*, maximum 3 retries).
+- Automatically capable of matching incoming JSON maps straight to `dtta` layer `form` molds, structuring the incoming schemas dynamically.
+
 ```swara
 send.petition["http://api.mock.data.com/info"];
 send.petition[variable_or_payload];
+```
+
+**std.time (The Time Guardian):**
+Built-in native module crafted for accurately measuring the time offset between workflow routes, auditing timestamps, and effectively running delay blockers safely.
+```swara
+// Retrieve current exact timestamp (ISO 8601)
+set start = call function std.time.now[] -> txt;
+
+// Add a safe blocking script execution delay (e.g., 2.5 seconds)
+call function std.time.delay[2.5] -> empty;
+
+// Compare two dates (generates time split result in seconds)
+set diff = call function std.time.compare[end_date, start_date] -> num;
+
+// Format native timestamps (using standard strftime format)
+set log_date = call function std.time.format[start, "%Y-%m-%d"] -> txt;
+```
+
+**std.math (Precision Calculus):**
+Ideal for Finance or IoT workflows. Provides rounding schemas, analytic statistical functions, and deep transformations cleanly without corrupting variable scopes:
+```swara
+// Currency or precision roundings (e.g., 2 decimals)
+set rounded_price = call function std.math.round[12.34567, 2] -> dec;
+
+// Absolute value
+set absolute = call function std.math.abs[-50] -> num;
+
+// List operations / Metrics
+set total = call function std.math.sum[prices_list] -> dec;
+set mean_val = call function std.math.mean[temperature_list] -> dec;
+set upper = call function std.math.max[measurement_list] -> num;
+```
+
+**std.crypto (The Vault):**
+The security guardian inside Swara. Perfect for hashing payloads, ensuring secure inter-service communications, and handling state encryption on user variables.
+```swara
+// Destructive one-way hash transformations (SHA-256)
+set checksum_data = call function std.crypto.hash[my_variable] -> txt;
+
+// Sign message integrity employing a secret shared key (HMAC-SHA-256)
+set signature = call function std.crypto.sign[message_body, "SECRET_KEY"] -> txt;
+
+// Symmetrical state encryption handling private variables natively
+set cyphered = call function std.crypto.encrypt[private_variable, "PASSWORD123"] -> txt;
+set decrypted = call function std.crypto.decrypt[cyphered, "PASSWORD123"] -> txt;
 ```
 
 ---
