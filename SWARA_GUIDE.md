@@ -234,9 +234,45 @@ Native library to prevent your API from being saturated or receiving DoS attacks
 // Blocks connections from 'ip' if it exceeds 10 requests in 1 second.
 limit.api[ip, 10, 1];
 ```
+
 ---
 
-## 🔀 6. Control Structures (Conditionals)
+## 🌉 6. Module System (Native Extensibility Bridge)
+Swara is not constrained only to the functions in its `Core`. It has a hybrid module system that allows injecting any external capabilities (AI, Bluetooth, Computer Vision, etc.) utilizing Python-built libraries without the developer ever leaving Swara's natural syntax.
+
+### Moduling Installation
+Modules must be placed entirely within a folder called `/sw_modules` inside your project root. The engine also features automatic remote module downloading utilizing the special `import.module` instruction.
+
+```swara
+// Importing a local module placed in /sw_modules/my_module
+import.module["my_module"];
+
+// Remote installing directly into /sw_modules dropping it via git cloning
+import.module["https://github.com/user/my_library_repo"];
+```
+
+### The Bridge Block & Contracts
+Every external module conforms to two files logically:
+1. `bridge.py`: The Python wrapping script bridging heavy workloads.
+2. `contract.swara`: (`fncs` layer) Exposes strictly the command signatures bridging the system together via a `bridge` block.
+
+**Contract Example (contract.swara):**
+```swara
+declare my_library.swara ass fncs
+
+delimiter fncs definition {
+    // Links to underlying python script sandbox 
+    bridge to "bridge.py" as python_engine {
+        // Teaches the Swara compiler a wildly new reserved keyword 
+        crte command generate_pdf [content -> txt, destination -> txt];
+    }
+}
+```
+After the import, your regular `lgca` code recognizes `generate_pdf["Docs", "out.pdf"]` as a 100% native Swara reserved command globally. Responses processed back from the Python layer are automatically mapped into the special read-only system variable `sys.last_bridge_response`.
+
+---
+
+## 🔀 7. Control Structures (Conditionals)
 Exclusive to logic blocks, these operate without a semicolon at the end of their block braces `{ }`.
 
 **If / Else If / Else:**

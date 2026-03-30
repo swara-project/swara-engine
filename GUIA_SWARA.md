@@ -234,9 +234,45 @@ Librería nativa para evitar que tu API sea saturada o reciba ataques DoS. Detie
 // Bloquea conexiones de 'ip' si sobrepasa 10 peticiones en 1 segundo.
 limit.api[ip, 10, 1];
 ```
+
 ---
 
-## 🔀 6. Estructuras de Control (Condicionales)
+## 🌉 6. Sistema de Módulos (Nativa Extensión)
+Swara no está limitado a las funciones de su `Core`. Posee un sistema de módulos híbridos que permite inyectar cualquier capacidad externa (IA, Bluetooth, Visión Artificial, etc.) mediante librerías construidas en Python sin que el programador tenga que abandonar la sintaxis de Swara.
+
+### Instalación de Módulos
+Los módulos se ubican obligatoriamente en una de carpeta llamada `/sw_modules` en la raíz de tu proyecto. El motor descargará automáticamente repositorios usando el comando especial `import.module`.
+
+```swara
+// Importar un modulo local ubicado en /sw_modules/mi_modulo
+import.module["mi_modulo"];
+
+// Descargar e instalar remotamente via Git directo a /sw_modules
+import.module["https://github.com/usuario/mi_libreria"];
+```
+
+### El Bloque Bridge y Contratos
+Todo módulo externo consta de dos archivos:
+1. `bridge.py`: El script de Python que hace el trabajo rudo.
+2. `contract.swara`: (Capa `fncs`) El archivo en sintaxis Swara que declara qué comandos se añaden al lenguaje, usando el bloque `bridge`.
+
+**Ejemplo de un contrato (contract.swara):**
+```swara
+declare mi_libreria.swara ass fncs
+
+delimiter fncs definicion {
+    // Engancha con el motor de python subyacente
+    bridge to "bridge.py" as python_engine {
+        // Enseña a swara una palabra reservada completamente nueva
+        crte command generar_pdf [contenido -> txt, destino -> txt];
+    }
+}
+```
+Al importar, tu código de la capa `lgca` ahora reconocerá `generar_pdf["Docs", "out.pdf"]` como un comando 100% nativo. Las respuestas del motor en Python se capturan en la variable especial de solo lectura `sys.last_bridge_response`.
+
+---
+
+## 🔀 7. Estructuras de Control (Condicionales)
 Exclusivas del bloque lógico que operan sin punto y coma al final de sus llaves de bloque `{ }`.
 
 **If / Else If / Else:**
