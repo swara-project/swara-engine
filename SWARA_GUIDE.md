@@ -266,6 +266,13 @@ set email = call function std.mask.email[user.email] -> txt;
 // Mask completely sensitive text into asterisks
 set hidden = call function std.mask.hidden[pwd] -> txt;
 `
+
+**std.limit (Rate Limiting):**
+Native library to prevent your API from being saturated or receiving DoS attacks. Stops execution instantly if the IP exceeds the limit.
+```swara
+// Blocks connections from 'ip' if it exceeds 10 requests in 1 second.
+limit.api[ip, 10, 1];
+```
 ---
 
 ## 🔀 6. Control Structures (Conditionals)
