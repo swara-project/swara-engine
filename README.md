@@ -73,10 +73,12 @@ python core/swara_cli.py version
 
 The `swaraBytecodeEngine` translates operations into internal Opcodes for systematic evaluation.
 
-### Memory & Variable Constraints
+### State & Immutability Contracts
 Variables are initiated via `set` and transformed via `update`. Data types (`num`, `dec`, `txt`, `bin`, `list`, `empty`) are strictly evaluated for assignments.
 
-- **Data Tracking / Scope Enforcement:** Variables created or scoped within a specific route block are encapsulated. The engine utilizes Commit/Rollback variable snapshots during route transitions to maintain safe state orchestration.
+- **Data Tracking / Boundary Enforcement:** Variables created or scoped within a specific route block are thoroughly encapsulated according to our *Shared-Nothing Architecture*. The engine utilizes a Shadow Copy state projection and restricts state transfer strictly to `inject` declarations. If un-injected entities are queried, a `BOUNDARY ERROR` is raised, acting as a logical firewall to prevent side effect spillovers.
+- **Engine Journaling & Rehydration (Immortal Checkpoints):** Swara seamlessly handles fault-tolerant state persistence. Use the `persist;` keyword within `route` mapping keys to safely snapshot the orchestrated state to `.swchk` files. The engine guarantees *"Exactly Once"* interactions via the intrinsically provided `sys.tx_id`. Upon an unpredicted hardware or service loss, rebooting the VM automatically rehydrates variable dictionaries and picks up execution at the exact pre-saved route border.
+- **Concurrency Support (Fork & Join / Reconcilation):** Branch routing can be performed concurrently using `fork -> [target1], [target2] escape [emergency_route]`. Each branch inherently receives an independent clone of the snapshot, making parallel processing intrinsically thread-safe by bypassing variable mutability entirely. States merge back using `inject_back` commands explicit to each route mapping (`fork -> [ruta_a inject_back saldo], [ruta_b inject_back logs]`). Violating this selectively isolated return scheme generates a boundary exception. If any child thread encounters a critical error, the Orchestrator initiates a Collective Panic Management sequence, bypassing synchronization and safely escaping to the fallback route.
 - **Form Behaviors**: The engine parses specific syntax rules for fields dynamically:
     - `computed`: Requires exact component expressions to be filled.
     - `derived`: Allows updates but validates operation history upstream.

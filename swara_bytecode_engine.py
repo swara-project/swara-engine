@@ -1,5 +1,9 @@
 import re
 import os
+import json
+import uuid
+import hashlib
+import threading
 from copy import deepcopy
 from enum import Enum, auto
 
@@ -50,10 +54,55 @@ class swaraBytecodeEngine:
         self.compiled_link_files = set()
         self.allowed_scope = None
         self.route_transitions = {}
+        self._fatally_failed = False
+        self._fatal_error = None
+        self.checkpoint_file = ".swchk"
 
     def error(self, error_type, message, line_num="?"):
         error_msg = f"[{error_type}] Line {line_num} in '{self.current_file}':\n-> {message}"
         raise Exception(error_msg)
+
+    def _generate_checksum(self, data_str):
+        return hashlib.sha256(data_str.encode('utf-8')).hexdigest()
+
+    def _save_checkpoint(self, route_name):
+        state = {
+            "current_route": route_name,
+            "global_state": self.variables
+        }
+        state_json = json.dumps(state, sort_keys=True)
+        checksum = self._generate_checksum(state_json)
+        
+        checkpoint_data = {
+            "data": state,
+            "checksum": checksum
+        }
+        with open(self.checkpoint_file, "w", encoding="utf-8") as f:
+            json.dump(checkpoint_data, f, indent=2)
+        # self.output_handler(f"[JOURNALING] Context checkpoint state securely saved at route '{route_name}'.")
+
+    def _load_checkpoint(self):
+        if not os.path.exists(self.checkpoint_file):
+            return None
+        try:
+            with open(self.checkpoint_file, "r", encoding="utf-8") as f:
+                checkpoint_data = json.load(f)
+            
+            state = checkpoint_data.get("data")
+            file_checksum = checkpoint_data.get("checksum")
+            
+            # Verify Integrity
+            state_json = json.dumps(state, sort_keys=True)
+            if self._generate_checksum(state_json) != file_checksum:
+                self.output_handler("[SECURITY WARNING] Checkpoint file corrupted or tampered. Starting fresh.")
+                return None
+                
+            self.variables = state.get("global_state", {})
+            self.output_handler(f"[JOURNALING] Checkpoint found. Rehydrating state and resuming from '{state.get('current_route')}'.")
+            return state.get("current_route")
+        except Exception as e:
+            self.output_handler(f"[SYSTEM WARNING] Failed to read checkpoint: {e}. Starting fresh.")
+            return None
 
     def load_file(self, path):
         if not str(path).endswith(".swara"):
@@ -117,7 +166,7 @@ class swaraBytecodeEngine:
         if self.allowed_scope is not None:
             clean_name = str(var_name).replace("dtta.", "").replace("lgca.", "")
             if clean_name not in self.allowed_scope:
-                self.error("SCOPE ERROR", f"State Mapping Block: Variable '{clean_name}' is encapsulated and cannot be accessed inside this route.", line_num)
+                self.error("BOUNDARY ERROR", f"State Mapping Block: Variable '{clean_name}' is encapsulated and cannot be accessed inside this route.", line_num)
 
     def _get_field_metadata(self, var_name):
         if "." in var_name:
@@ -531,6 +580,7 @@ class swaraBytecodeEngine:
                             self.route_transitions[origin_route] = []
                             
                         injected = []
+                        persist_flag = False
                         if has_block:
                             body_inst, end_i = self._collect_block(instructions, i)
                             for b_line, b_ln in body_inst:
@@ -541,6 +591,8 @@ class swaraBytecodeEngine:
                                         if raw_content:
                                             raw_vars = raw_content.split(",")
                                             injected.extend([v.strip().replace("dtta.", "").replace("lgca.", "") for v in raw_vars])
+                                elif b_line.startswith("persist"):
+                                    persist_flag = True
                             i = end_i + 1
                         else:
                             i += 1
@@ -549,6 +601,7 @@ class swaraBytecodeEngine:
                             "target": target_route,
                             "condition": condition,
                             "injected": injected if injected else None,
+                            "persist": persist_flag,
                             "line_num": line_num
                         })
                         continue
@@ -562,6 +615,50 @@ class swaraBytecodeEngine:
                         continue
                 else: 
                     i += 1
+
+            # RUTAS PARALELAS (FORK)
+            elif line.startswith("fork"):
+                match = re.search(r"fork\s+(\w+)\s*->\s*(.+)", line)
+                if match:
+                    origin_route = match.group(1)
+                    raw_targets = match.group(2)
+                    
+                    # Detectar cláusula de escape
+                    escape_route = None
+                    if "escape" in raw_targets:
+                        parts = raw_targets.split("escape")
+                        raw_targets = parts[0].strip()
+                        escape_match = re.search(r"\[(.*?)\]", parts[1])
+                        if escape_match:
+                            escape_route = escape_match.group(1).strip()
+                    
+                    # Extraer contenidos de los corchetes: [ruta_a inject_back var1]
+                    target_blocks = re.findall(r"\[(.*?)\]", raw_targets)
+                    targets_info = []
+                    
+                    for block in target_blocks:
+                        if "inject_back" in block:
+                            parts = block.split("inject_back")
+                            r_name = parts[0].strip()
+                            vars_str = parts[1].strip()
+                            inject_vars = [v.strip().replace("dtta.", "").replace("lgca.", "") for v in vars_str.split(",") if v.strip()]
+                            targets_info.append({"route": r_name, "inject_back": inject_vars})
+                        else:
+                            targets_info.append({"route": block.strip(), "inject_back": []})
+                    
+                    if origin_route not in self.route_transitions:
+                        self.route_transitions[origin_route] = []
+                    
+                    # Fork is treated as a transition with multiple targets
+                    self.route_transitions[origin_route].append({
+                        "targets": targets_info,
+                        "escape_route": escape_route,
+                        "condition": None, # Unconditional branch
+                        "injected": None, # Forks copy the full state automatically via Shared-Nothing
+                        "is_fork": True,
+                        "line_num": line_num
+                    })
+                i += 1
                 
             else:
                 # Ignoramos cosas no implementadas en el demo
@@ -867,10 +964,31 @@ class swaraBytecodeEngine:
                 
         if is_function: return None
 
-    def start_routing(self):
-        if not self.entry_point: return
-        current_route = self.entry_point
+    def _run_forked_route(self, route_name, state_snapshot):
+        # Shared-Nothing Architecture: Clonamos el motor para el hilo forkeado
+        new_engine = swaraBytecodeEngine()
+        new_engine.variables = deepcopy(state_snapshot) # Deepcopy aquí sí conviene para el aislamiento total de la rama paralela
+        new_engine.routes = self.routes
+        new_engine.route_transitions = self.route_transitions
+        new_engine.functions = self.functions
+        new_engine.forms = self.forms
+        new_engine.error_handler = self.error_handler
+        new_engine.entry_point = route_name
+        
+        # Redirigimos el handler de salida temporalmente para mostrar de qué hilo viene (opcional)
+        # new_engine.output_handler = lambda msg: print(f"[Thread-{route_name}] {msg}")
+        
+        new_engine.start_routing()
+
+    def start_routing(self, start_from_checkpoint=None):
+        if not self.entry_point and not start_from_checkpoint: return
+        current_route = start_from_checkpoint if start_from_checkpoint else self.entry_point
         self.allowed_scope = None
+        
+        # Inject system variables
+        if "sys.tx_id" not in self.variables:
+            self.variables["sys.tx_id"] = {"type": "txt", "value": uuid.uuid4().hex, "layer": "sttr", "behavior": "immutable"}
+            
         while current_route:
             # print(f"\n[ROUTING]: >>> Entering station '{current_route}' >>>")
             if current_route in self.routes:
@@ -885,7 +1003,8 @@ class swaraBytecodeEngine:
                 insts = self.get_instructions(content)
                 body = self.compile(insts)
 
-            snapshot = deepcopy(self.variables)
+            # Utilizar shadow copy en lugar de deepcopy (Contrato de Inmutabilidad)
+            snapshot = {k: {"type": v["type"], "value": v["value"], "layer": v["layer"]} for k, v in self.variables.items()}
             try:
                 self.run_vm(body)
                 next_route = None
@@ -894,6 +1013,65 @@ class swaraBytecodeEngine:
                 # Evaluamos transiciones usando el estado final de las variables tras ejecutar la ruta actual
                 if current_route in self.route_transitions:
                     for transition in self.route_transitions[current_route]:
+                        if transition.get("is_fork"):
+                            # ES UN FORK: Instanciamos hilos independientes para cada ruta objetivo
+                            targets_info = transition["targets"]
+                            # print(f"\n[ROUTING]: >>> Forking from '{current_route}' to {[t['route'] for t in targets_info]} >>>")
+                            
+                            threads = []
+                            forked_engines = []
+                            for t_info in targets_info:
+                                route_target = t_info["route"]
+                                
+                                # Setup new engine per thread (Shared-Nothing)
+                                new_engine = swaraBytecodeEngine()
+                                new_engine.variables = deepcopy(self.variables)
+                                new_engine.routes = self.routes
+                                new_engine.route_transitions = self.route_transitions
+                                new_engine.functions = self.functions
+                                new_engine.forms = self.forms
+                                new_engine.error_handler = self.error_handler
+                                new_engine.entry_point = route_target
+                                
+                                t = threading.Thread(target=new_engine.start_routing)
+                                t.start()
+                                threads.append(t)
+                                forked_engines.append({"engine": new_engine, "info": t_info})
+                            
+                            # Join the threads: El Orquestador espera el regreso de sincronización
+                            for t in threads:
+                                t.join()
+                                
+                            # GESTIÓN DE PÁNICO COLECTIVO
+                            fork_failed = next((fe for fe in forked_engines if fe["engine"]._fatally_failed), None)
+                            
+                            if fork_failed:
+                                if transition.get("escape_route"):
+                                    self.output_handler(f"[FORK PANIC] Collective Panic triggered! Aborting reconciliation and jumping to escape route '{transition['escape_route']}'...")
+                                    next_route = transition["escape_route"]
+                                    injected_scope = None
+                                    break
+                                else:
+                                    failed_name = fork_failed["info"]["route"]
+                                    err = fork_failed["engine"]._fatal_error
+                                    self.error("PANIC ERROR", f"A child route ({failed_name}) critically failed and no 'escape' clause was provided in fork.\n-> {str(err)}", transition["line_num"])
+                                
+                            # RECONCILIACIÓN DE ESTADO: Mapeo Selectivo de Regreso (Join)
+                            for fe in forked_engines:
+                                t_info = fe["info"]
+                                engine = fe["engine"]
+                                inject_back = t_info["inject_back"]
+                                
+                                for var_name in inject_back:
+                                    if var_name in engine.variables:
+                                        self.variables[var_name] = engine.variables[var_name]
+                                    else:
+                                        # Strict erroring: el orquestador detecta que el hilo no cumplio el contrato
+                                        self.error("BOUNDARY ERROR", f"Forked route '{t_info['route']}' failed to inject_back missing variable '{var_name}'.", transition["line_num"])
+                                        
+                            next_route = None # Termina este hilo principal
+                            break
+                        
                         condition = transition["condition"]
                         if not condition or self.evaluate_condition(condition, transition["line_num"]):
                             next_route = transition["target"]
@@ -901,6 +1079,12 @@ class swaraBytecodeEngine:
                                 self._enforce_scope(next_route, transition["line_num"])
                                 next_route = str(self.variables[next_route]["value"])
                             injected_scope = transition["injected"]
+                            
+                            # CHECKPOINT IMMORTAL: Persistencia de estado
+                            if transition.get("persist"):
+                                self.variables["sys.tx_id"] = {"type": "txt", "value": uuid.uuid4().hex, "layer": "sttr", "behavior": "immutable"}
+                                self._save_checkpoint(next_route)
+                                
                             break
                             
                 if next_route:
@@ -917,14 +1101,24 @@ class swaraBytecodeEngine:
                     current_route = self.error_handler
                     self.allowed_scope = None
                 else:
-                    raise e
+                    self._fatally_failed = True
+                    self._fatal_error = e
+                    break
+                    
+        # Raise errors if the main loop collapsed and it wasn't handled
+        if self._fatally_failed and self.error_handler is None:
+            raise self._fatal_error
 
     def execute(self, instructions):
         # We perform compilation first
         main_bytecode = self.compile(instructions)
-        # We start route loop if there is an entry point
-        if self.entry_point:
-            self.start_routing()
+        
+        # Hydrate state from checkpoint if one exists
+        loaded_checkpoint = self._load_checkpoint()
+        
+        # We start route loop if there is an entry point or a checkpoint
+        if self.entry_point or loaded_checkpoint:
+            self.start_routing(start_from_checkpoint=loaded_checkpoint)
         else:
             self.run_vm(main_bytecode)
 

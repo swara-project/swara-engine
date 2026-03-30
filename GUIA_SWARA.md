@@ -40,14 +40,16 @@ link from dtta -> types.swara;
 El flujo de ejecución en Swara está basado en bloques que abren con la palabra `delimiter` indicando la capa interna a la que pertenece ese bloque.
 
 ### 🧩 2.1 Capa de Estructura (`sttr`) - Enrutamiento y Scopes
-Swara funciona mediante un Patrón de Orquestación Centralizada para el enrutamiento (Centralized Orchestration Pattern), prohibiendo el clásico "jumping". Dejas una ruta, y el orquestador te transiciona a otra. **IMPORTANTE:** Las variables nacen y mueren de forma aislada en su propia ruta. Si cambias de ruta e intentas usar una variable anterior fallará con un `SCOPE ERROR`, a menos que las integres al nuevo viaje usando `inject`, el cual ahora funciona mediante un mecanismo seguro de Commit/Rollback de snapshots durante las transiciones.
+Swara funciona mediante un Patrón de Orquestación Centralizada para el enrutamiento (Centralized Orchestration Pattern), prohibiendo el clásico "jumping". Dejas una ruta, y el orquestador te transiciona a otra. **IMPORTANTE:** Las variables nacen y mueren de forma aislada en su propia ruta. Si cambias de ruta e intentas usar una variable anterior fallará con un `BOUNDARY ERROR`, a menos que las integres al nuevo viaje usando `inject`, el cual funciona como un Contrato de Inmutabilidad de Frontera. Ninguna ruta puede heredar el desorden de la anterior. Si no declaras tu intención de usar un dato, el motor te protege de ti mismo negando el acceso.
 
 En un archivo `sttr` declaras (mediante el Centralized Orchestration Pattern):
 * `entry_point -> ruta_inicial;` : Define dónde arranca la VM.
 * `route origen -> destino;` : Redirección obligatoria incondicional.
 * `route origen -> destino when [condicion];` : Redirección condicional según la variable final evaluada en la ruta origen.
 * `error_handler -> [route];` : Redirige centralmente de forma segura en caso de fallos.
-* **`inject [variables]`**: Se declara dentro de la llave de un route. Autoriza la migración de variables usando snapshots de Commit/Rollback.
+* **`inject [variables]`**: Se declara dentro de la llave de un route. Autoriza la migración de variables usando una arquitectura Shared-Nothing. Sirve como cortafuegos lógico.
+* **`persist;`**: Se declara dentro de la llave de un route. Le indica al orquestador que debe convertir el estado actual en un "Checkpoint Inmortal" (journaling). Genera un ID de transacción en `sys.tx_id`. Si el sistema cae, retomará desde esa ruta hidratando la memoria automáticamente.
+* **`fork -> [route_1 inject_back var1], [route_2] escape [route_error];`**: (Funcionalidad Concurrente) Permite la ejecución paralela y simultánea compartiendo estados inmutables. Si un hilo falla críticamente, se activa la Gestión de Pánico Colectivo: el Orquestador aborta la reconciliación y te redirige a la ruta definida en `escape`.
 * **Declaración de Sub-rutas:** Puedes inicializar bloques con `route nombre { ... }`.
 
 **Ejemplo `enrutador.swara`:**
@@ -60,6 +62,7 @@ delimiter sttr setup {
     
     route home_view -> login_view when [logged_in == no] {
         inject [intentos, dtta.session]
+        persist; /* Si el sistema se apaga aquí, al volver a encender continuará en login_view */
     }
 }
 ```
@@ -266,5 +269,5 @@ delimiter dtta esquemas {
 ## 🚀 Resumen Crítico de Construcción (Cheat Sheet)
 1. **Punto y Coma (;):** Absolutamente obligatorio al finalizar rutinas genéricas atómicas (`set`, `update`, `link from`, `update.list`, llamadas directas con array o `loop`).
 2. **Llaves ({ }):** No llevan punto y coma final. Engloban un núcleo o contexto (`delimiter sttr`, operaciones de `if/switch / default`, funciones y layers).
-3. **Control del State (Variables perdidas):** Tu enrutador limpia las variables entre un `route` y otro para aliviar la recolección de basura. Todo lo que te importa mantener de un paso a otro lo obligas a fluir en las llaves del envío `inject [mi_var]`.
+3. **Control del State (Variables perdidas):** Tu enrutador limpia las variables entre un `route` y otro para aplicar el Principio de Aislamiento. Todo lo que te importa mantener de un paso a otro lo obligas a fluir en las llaves del envío `inject [mi_var]`.
 4. **Respetar Arquitectura:** Intentar colocar sintaxis `set` a nivel raíz o un `if` dentro del enrutador va a lanzar fatalidades instantáneas de `ARCH LAYER`. Cada archivo debe ceñirse a la capacidad de su marca `.swara ass capa`.
