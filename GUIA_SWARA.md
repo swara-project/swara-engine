@@ -48,6 +48,7 @@ En un archivo `sttr` declaras (mediante el Centralized Orchestration Pattern):
 * `route origen -> destino when [condicion];` : Redirección condicional según la variable final evaluada en la ruta origen.
 * `error_handler -> [route];` : Redirige centralmente de forma segura en caso de fallos.
 * **`inject [variables]`**: Se declara dentro de la llave de un route. Autoriza la migración de variables usando una arquitectura Shared-Nothing. Sirve como cortafuegos lógico.
+* **`use [capa] -> "[archivo]"`**: Inyección de dependencias. Especifica qué archivo usar para una capa externa a nivel de la siguiente ruta. Ejemplo: `use fncs -> "mid_utils.swara"`.
 * **`persist;`**: Se declara dentro de la llave de un route. Le indica al orquestador que debe convertir el estado actual en un "Checkpoint Inmortal" (journaling). Genera un ID de transacción en `sys.tx_id`. Si el sistema cae, retomará desde esa ruta hidratando la memoria automáticamente.
 * **`fork -> [route_1 inject_back var1], [route_2] escape [route_error];`**: (Funcionalidad Concurrente) Permite la ejecución paralela y simultánea compartiendo estados inmutables. Si un hilo falla críticamente, se activa la Gestión de Pánico Colectivo: el Orquestador aborta la reconciliación y te redirige a la ruta definida en `escape`.
 * **Declaración de Sub-rutas:** Puedes inicializar bloques con `route nombre { ... }`.
@@ -61,6 +62,7 @@ delimiter sttr setup {
     entry_point -> home_view;
     
     route home_view -> login_view when [logged_in == no] {
+        use fncs -> "auth_functions.swara"
         inject [intentos, dtta.session]
         persist; /* Si el sistema se apaga aquí, al volver a encender continuará en login_view */
     }
@@ -69,20 +71,22 @@ delimiter sttr setup {
 
 ### 🧠 2.2 Capa Lógica (`lgca`)
 En estos archivos colocarás los bloques de código que ejecutan las operaciones correspondientes para las rutas que llamaste desde `sttr`.
+Opcionalmente y como buena práctica, debes usar Contratos de Interfaz mediante la palabra clave `expects`.
 
 **Ejemplo `vistas.swara`:**
 ```swara
 declare vistas.swara ass lgca
 
-delimiter lgca home_view {
+delimiter lgca home_view expects [intentos -> num, dtta.session -> str] {
     set logged_in = no -> bin;
+    call fncs.verificar_credenciales[intentos];
     console.print["Bienvenido! Verificando credenciales..."];
     /* Si esta ruta termina en este punto, el router sttr evalúa 'logged_in == no' para saltar a login_view */
 }
 ```
 
 ### 🛠️ 2.3 Capa de Funciones (`fncs`)
-Sub-rutinas aisladas que solo habitan en su ambiente. Sólo se llaman en tiempo de ejecución de las lógicas.
+Sub-rutinas que se ejecutan dentro del contexto de la ruta (`lgca`) que las invoca. Pueden leer y modificar directamente las variables del entorno en el que fueron llamadas sin necesidad de requerir múltiples parámetros explícitos (evitando el "Prop Drilling"). Sólo se invocan en tiempo de ejecución de las lógicas.
 
 **Ejemplo `utils.swara`:**
 ```swara

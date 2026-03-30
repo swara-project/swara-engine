@@ -54,6 +54,7 @@ class swaraBytecodeEngine:
         self.compiled_link_files = set()
         self.allowed_scope = None
         self.route_transitions = {}
+        self.route_expectations = {}
         self._fatally_failed = False
         self._fatal_error = None
         self.checkpoint_file = ".swchk"
@@ -255,20 +256,33 @@ class swaraBytecodeEngine:
         self.current_layer = match.group(2).strip().lower()
         
         # Validar el uso de 'delimiter' y que la capa coincida con el passport
-        delimiter_regex = r"delimiter\s+(sttr|lgca|fncs|dtta)\s+(\w+)\s*\{([\s\S]*)\}"
+        delimiter_regex = r"delimiter\s+(sttr|lgca|fncs|dtta)\s+(\w+)(?:\s+expects\s+\[(.*?)\])?\s*\{([\s\S]*)\}"
         delimiter_match = re.search(delimiter_regex, code, re.IGNORECASE)
         if not delimiter_match:
             raise Exception("[LAYER ARCHITECTURE ERROR] Missing or invalid 'delimiter' block. Expected 'delimiter <layer> <name> { ... }'.")
             
         block_layer = delimiter_match.group(1).lower()
+        block_name = delimiter_match.group(2)
+        expects_str = delimiter_match.group(3)
+        
         if block_layer != self.current_layer:
             raise Exception(f"[LAYER ARCHITECTURE ERROR] Layer mismatch. File declared as '{self.current_layer}' but delimiter specifies '{block_layer}'.")
+            
+        if self.current_layer == "lgca" and expects_str:
+            expectations = {}
+            for item in expects_str.split(","):
+                if "->" in item:
+                    var_n, var_t = item.split("->")
+                    expectations[var_n.strip()] = var_t.strip()
+                else:
+                    expectations[item.strip()] = None
+            self.route_expectations[block_name] = expectations
             
         # Extraemos el contenido de todo el programa (ignorando todo hasta el inicio pero preservando 'link from')
         # Para que los links externos (link from ...) funcionen, extraemos solo su bloque para las instrucciones a analizar, 
         # PERO incluimos los 'link from' explícitamente ya que suelen ir afuera del delimiter.
         links = "\n".join(re.findall(r"link\s+from\s+.*?;?", code[:delimiter_match.start()]))
-        block_content = delimiter_match.group(3)
+        block_content = delimiter_match.group(4)
         
         return links + "\n" + block_content
 
@@ -300,10 +314,10 @@ class swaraBytecodeEngine:
             # SET var = val -> type
             if line.startswith("set "):
                 if "call function" in line:
-                    match = re.search(r"set\s+(\w+)\s*=\s*call function\s+(\w+)\[(.*)\]\s*->\s*(\w+)", line)
+                    match = re.search(r"set\s+(\w+)\s*=\s*call function\s+([\w\.]+)\[(.*)\]\s*->\s*(\w+)", line)
                     if match:
                         var_name = match.group(1)
-                        func_name = match.group(2)
+                        func_name = match.group(2).split(".")[-1] # Ignorar alias de capa p.ej. fncs.
                         args = [arg.strip() for arg in match.group(3).split(",") if arg.strip()]
                         ret_type = match.group(4)
                         # We push args to operand stack or keep them in instruction
@@ -494,15 +508,17 @@ class swaraBytecodeEngine:
                     i = end_i + 1
                     continue
             elif "call function" in line:
-                assign_match = re.search(r"set\s+(\w+)\s*=\s*call function\s+(\w+)\[(.*)\]\s*->\s*(\w+)", line)
+                assign_match = re.search(r"set\s+(\w+)\s*=\s*call function\s+([\w\.]+)\[(.*)\]\s*->\s*(\w+)", line)
                 if assign_match:
-                    var_name, func_name, args_str, ret_type = assign_match.groups()
+                    var_name, func_name_raw, args_str, ret_type = assign_match.groups()
+                    func_name = func_name_raw.split(".")[-1]
                     args_list = [a.strip() for a in args_str.split(",") if a.strip()]
                     bytecode.append((Opcode.CALL_FUNC, var_name, func_name, args_list, ret_type, line_num))
                 else:
-                    direct_match = re.search(r"call function\s+(\w+)\[(.*)\]\s*->\s*(\w+)", line)
+                    direct_match = re.search(r"call function\s+([\w\.]+)\[(.*)\]\s*->\s*(\w+)", line)
                     if direct_match:
-                        func_name, args_str, ret_type = direct_match.groups()
+                        func_name_raw, args_str, ret_type = direct_match.groups()
+                        func_name = func_name_raw.split(".")[-1]
                         args_list = [a.strip() for a in args_str.split(",") if a.strip()]
                         discard_var = f"_discard_{line_num}"
                         bytecode.append((Opcode.CALL_FUNC, discard_var, func_name, args_list, ret_type, line_num))
@@ -581,6 +597,7 @@ class swaraBytecodeEngine:
                             
                         injected = []
                         persist_flag = False
+                        uses = {}
                         if has_block:
                             body_inst, end_i = self._collect_block(instructions, i)
                             for b_line, b_ln in body_inst:
@@ -593,6 +610,11 @@ class swaraBytecodeEngine:
                                             injected.extend([v.strip().replace("dtta.", "").replace("lgca.", "") for v in raw_vars])
                                 elif b_line.startswith("persist"):
                                     persist_flag = True
+                                elif b_line.startswith("use"):
+                                    use_match = re.search(r"use\s+(sttr|lgca|fncs|dtta)\s*->\s*\"?(.*?)\"?", b_line)
+                                    if use_match:
+                                        u_layer, u_file = use_match.groups()
+                                        uses[u_layer] = u_file.strip('"')
                             i = end_i + 1
                         else:
                             i += 1
@@ -602,6 +624,7 @@ class swaraBytecodeEngine:
                             "condition": condition,
                             "injected": injected if injected else None,
                             "persist": persist_flag,
+                            "uses": uses,
                             "line_num": line_num
                         })
                         continue
@@ -1006,9 +1029,30 @@ class swaraBytecodeEngine:
             # Utilizar shadow copy en lugar de deepcopy (Contrato de Inmutabilidad)
             snapshot = {k: {"type": v["type"], "value": v["value"], "layer": v["layer"]} for k, v in self.variables.items()}
             try:
+                # Validar Contrato de Capa (expects)
+                if current_route in self.route_expectations:
+                    expects = self.route_expectations[current_route]
+                    missing = []
+                    type_errors = []
+                    for exp_var, exp_type in expects.items():
+                        if self.allowed_scope is not None and exp_var not in self.allowed_scope:
+                            missing.append(exp_var)
+                        elif exp_var not in self.variables:
+                            missing.append(exp_var)
+                        elif exp_type and self.variables[exp_var]["type"] != exp_type:
+                            type_errors.append((exp_var, self.variables[exp_var]["type"], exp_type))
+                    
+                    if missing or type_errors:
+                        err_msg = ""
+                        if missing: err_msg += f"Missing or not injected variables: {', '.join(missing)}. "
+                        if type_errors: 
+                            err_msg += "Type mismatch: " + ", ".join([f"'{v}' (got {t}, expected {et})" for v, t, et in type_errors])
+                        self.error("CONTRACT MISMATCH ERROR", f"Route '{current_route}' expectations not met. {err_msg}", "?")
+
                 self.run_vm(body)
                 next_route = None
                 injected_scope = None
+                uses_scope = {}
                 
                 # Evaluamos transiciones usando el estado final de las variables tras ejecutar la ruta actual
                 if current_route in self.route_transitions:
@@ -1079,6 +1123,7 @@ class swaraBytecodeEngine:
                                 self._enforce_scope(next_route, transition["line_num"])
                                 next_route = str(self.variables[next_route]["value"])
                             injected_scope = transition["injected"]
+                            uses_scope = transition.get("uses", {})
                             
                             # CHECKPOINT IMMORTAL: Persistencia de estado
                             if transition.get("persist"):
@@ -1093,6 +1138,17 @@ class swaraBytecodeEngine:
                         self.allowed_scope = set(injected_scope)
                     else:
                         self.allowed_scope = None
+                        
+                    # Load dynamically injected files from 'use'
+                    for u_layer, u_file in uses_scope.items():
+                        file_key = os.path.normcase(os.path.abspath(u_file))
+                        if file_key not in self.compiled_link_files:
+                            self.compiled_link_files.add(file_key)
+                            code_linked = self.load_file(u_file)
+                            if code_linked:
+                                linked_content = self.validate_passport(code_linked)
+                                linked_insts = self.get_instructions(linked_content)
+                                self.compile(linked_insts)
                 else:
                     break
             except Exception as e:
