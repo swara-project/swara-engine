@@ -343,9 +343,20 @@ Esencial para procesar cadenas provenientes de inputs (`ask`) o retornos (`send.
 ### Gestión del Disco (Archivos Físicos)
 Swara está confinado en un entorno seguro ("sandbox"). Por seguridad, cualquier operación de creación, escritura o lectura es confinada obligatoriamente a una carpeta llamada `/storage` creada junto al motor en tiempo de ejecución. Evita la sobre-escritura accidental del disco duro.
 
+#### Archivos de Texto
 * `write.file["ruta_archivo.txt", contenido];` : Escribe tu variable o literal de texto en el archivo indicado (Ej. `registros.log`, se reflejará en `storage/registros.log`).
 * `read.file["ruta_archivo.txt", variable_destino];` : Lee un archivo desde disco localizándolo dentro de /storage y lo guarda en tu `variable_destino` (debe ser de tipo `txt`).
 * `check.file["ruta_archivo.txt", var_binaria];` : Revisa silenciosamente la existencia de un archivo físico previniendo errores en `read.file`.
+
+#### Archivos Binarios (Base64)
+* `read.bin["ruta_imagen.png", var_texto_base64];` : Lee un archivo binario (como imágenes o PDFs) y lo convierte a formato Base64 (texto), guardándolo en la variable destino para poder manipularlo con Swara.
+* `write.bin["ruta_copia.png", var_texto_base64];` : Recibe una cadena de texto en formato Base64 y la reconstruye en disco como un archivo binario válido.
+
+### Interacción con el Sistema Operativo (OS)
+* `list.dir["ruta_carpeta", lista_destino];` : Examina el directorio proporcionado y guarda un arreglo con los nombres de todos los archivos y subcarpetas dentro de `lista_destino` (tipo `list`).
+* `make.dir["nombre_carpeta"];` : Crea un directorio nuevo y vacío.
+* `remove.file["ruta_archivo"];` : Borra permanentemente el archivo indicado (o una carpeta siempre que esté vacía).
+* `exec.shell["comando_terminal", salida_txt];` : Actúa como un puente a la terminal nativa del sistema host. Ejecuta el comando y carga el resultado en una variable de tipo `txt` absorbiendo ambas salidas (stdout o stderr).
 
 ---
 
