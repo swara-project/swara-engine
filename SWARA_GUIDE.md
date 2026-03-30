@@ -292,6 +292,13 @@ Crucial to process queries returning from inputs (`ask`) or API responses (`send
 * `join.list[list, connector, dest_txt];` : Inverse action. Glues the elements back together placing a string connector achieving a joined `txt` sequence.
 * `clean.txt[variable];` : Acts exactly as "trim". Clears trailing and starting blank spaces on your variable re-updating it without manually commanding `update`.
 * `find.txt[source, search, result_bin];` : Verifies if a substring in `search` occurs within a `source`. Stores evaluating truth output boolean `yes` or `no` directly sequentially to `result_bin`.
+
+### File System Operations (Disk Management)
+Swara incorporates file boundaries using "sandbox" principles. To protect your disks maliciously, reading and writing files is forcibly contained down to an automatically created `/storage` sub-directory near the engine runtime execution folder.
+
+* `write.file["filepath.txt", content];` : Dumps a variable string or explicitly declared raw text generating/overwriting the indicated target (Ex. `records.txt` writes physically on `storage/records.txt`).
+* `read.file["filepath.txt", dest_var];` : Engages a disk read operation, finding the target matching inside `/storage` depositing raw string contents inside an existing `txt` `dest_var`.
+* `check.file["filepath.txt", bin_var];` : Quietly reviews file existence before crashing your workflow in a standard read, feeding your `bin_var` with logical existence verification result.
 ---
 
 ## ⚡ 9. Function Invocation

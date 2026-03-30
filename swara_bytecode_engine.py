@@ -25,6 +25,11 @@ class Opcode(Enum):
     TXT_CLEAN = auto()
     TXT_FIND = auto()
     
+    # File Operations
+    FILE_WRITE = auto()
+    FILE_READ = auto()
+    FILE_CHECK = auto()
+    
     # Control de Flujo
     JUMP = auto()
     JUMP_IF_FALSE = auto()
@@ -68,6 +73,14 @@ class swaraBytecodeEngine:
     def error(self, error_type, message, line_num="?"):
         error_msg = f"[{error_type}] Line {line_num} in '{self.current_file}':\n-> {message}"
         raise Exception(error_msg)
+
+    def _get_safe_storage_path(self, filepath):
+        base_dir = os.path.abspath(os.path.join(os.getcwd(), "storage"))
+        if not os.path.exists(base_dir):
+            os.makedirs(base_dir, exist_ok=True)
+        clean_name = filepath.strip('"').strip("'")
+        safe_name = os.path.basename(clean_name)
+        return os.path.join(base_dir, safe_name)
 
     def _generate_checksum(self, data_str):
         return hashlib.sha256(data_str.encode('utf-8')).hexdigest()
@@ -287,7 +300,7 @@ class swaraBytecodeEngine:
         # Extraemos el contenido de todo el programa (ignorando todo hasta el inicio pero preservando 'link from')
         # Para que los links externos (link from ...) funcionen, extraemos solo su bloque para las instrucciones a analizar, 
         # PERO incluimos los 'link from' explícitamente ya que suelen ir afuera del delimiter.
-        links = "\n".join(re.findall(r"link\s+from\s+.*?;?", code[:delimiter_match.start()]))
+        links = "\n".join(re.findall(r"link\s+from\s+[^;\n]+;?", code[:delimiter_match.start()]))
         block_content = delimiter_match.group(4)
         
         return links + "\n" + block_content
@@ -397,6 +410,20 @@ class swaraBytecodeEngine:
             elif line.startswith("find.txt"):
                 match = re.search(r"find\.txt\[\s*(\w+)\s*,\s*(.*?)\s*,\s*(\w+)\s*\]", line)
                 if match: bytecode.append((Opcode.TXT_FIND, match.group(1), match.group(2).strip(), match.group(3).strip(), line_num))
+                i += 1
+                
+            # FILE SYSTEM OPS
+            elif line.startswith("write.file"):
+                match = re.search(r"write\.file\[\s*(.*?)\s*,\s*(.*?)\s*\]", line)
+                if match: bytecode.append((Opcode.FILE_WRITE, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+            elif line.startswith("read.file"):
+                match = re.search(r"read\.file\[\s*(.*?)\s*,\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.FILE_READ, match.group(1).strip(), match.group(2).strip(), line_num))
+                i += 1
+            elif line.startswith("check.file"):
+                match = re.search(r"check\.file\[\s*(.*?)\s*,\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.FILE_CHECK, match.group(1).strip(), match.group(2).strip(), line_num))
                 i += 1
 
             # IF / ELSE IF / ELSE
@@ -973,6 +1000,59 @@ class swaraBytecodeEngine:
                             
                         found = "yes" if search_clean in val else "no"
                         self._register_variable(result_bin, found, "bin", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.FILE_WRITE:
+                    _, filepath, content, _ = instruction
+                    path_clean = filepath
+                    if path_clean in self.variables:
+                        self._enforce_scope(path_clean, line_num)
+                        path_clean = str(self.variables[path_clean]["value"])
+                        
+                    content_clean = content
+                    if content_clean in self.variables:
+                        self._enforce_scope(content_clean, line_num)
+                        content_clean = str(self.variables[content_clean]["value"])
+                    else:
+                        content_clean = content_clean.strip('"').strip("'")
+                        
+                    safe_path = self._get_safe_storage_path(path_clean)
+                    try:
+                        with open(safe_path, "w", encoding="utf-8") as f:
+                            f.write(content_clean)
+                    except Exception as e:
+                        self.error("FILE WRITE ERROR", f"Failed to write file {safe_path}: {str(e)}", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.FILE_READ:
+                    _, filepath, dest_var, _ = instruction
+                    path_clean = filepath
+                    if path_clean in self.variables:
+                        self._enforce_scope(path_clean, line_num)
+                        path_clean = str(self.variables[path_clean]["value"])
+                        
+                    safe_path = self._get_safe_storage_path(path_clean)
+                    try:
+                        if os.path.exists(safe_path):
+                            with open(safe_path, "r", encoding="utf-8") as f:
+                                content = f.read()
+                            self._register_variable(dest_var, content, "txt", line_num)
+                        else:
+                            self._register_variable(dest_var, "", "txt", line_num)
+                    except Exception as e:
+                        self.error("FILE READ ERROR", f"Failed to read file {safe_path}: {str(e)}", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.FILE_CHECK:
+                    _, filepath, result_bin, _ = instruction
+                    path_clean = filepath
+                    if path_clean in self.variables:
+                        self._enforce_scope(path_clean, line_num)
+                        path_clean = str(self.variables[path_clean]["value"])
+                        
+                    safe_path = self._get_safe_storage_path(path_clean)
+                    found = "yes" if os.path.exists(safe_path) else "no"
+                    self._register_variable(result_bin, found, "bin", line_num)
                     pc += 1
 
                 elif opcode == Opcode.LIST_GET_INDEX:

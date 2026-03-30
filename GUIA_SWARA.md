@@ -294,6 +294,13 @@ Esencial para procesar cadenas provenientes de inputs (`ask`) o retornos (`send.
 * `clean.txt[variable];` : Realiza un "trim". Elimina espacios vacíos al inicio y al final de tu variable mutando sin que debas reescribir `update`.
 * `find.txt[fuente, busqueda, resultado_bin];` : Busca si una palabra en `busqueda` existe dentro de `fuente` devolviendo el booleano en `resultado_bin`.
 
+### Gestión del Disco (Archivos Físicos)
+Swara está confinado en un entorno seguro ("sandbox"). Por seguridad, cualquier operación de creación, escritura o lectura es confinada obligatoriamente a una carpeta llamada `/storage` creada junto al motor en tiempo de ejecución. Evita la sobre-escritura accidental del disco duro.
+
+* `write.file["ruta_archivo.txt", contenido];` : Escribe tu variable o literal de texto en el archivo indicado (Ej. `registros.log`, se reflejará en `storage/registros.log`).
+* `read.file["ruta_archivo.txt", variable_destino];` : Lee un archivo desde disco localizándolo dentro de /storage y lo guarda en tu `variable_destino` (debe ser de tipo `txt`).
+* `check.file["ruta_archivo.txt", var_binaria];` : Revisa silenciosamente la existencia de un archivo físico previniendo errores en `read.file`.
+
 ---
 
 ## ⚡ 9. Invocación de Funciones
