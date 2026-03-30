@@ -38,6 +38,7 @@ class Opcode(Enum):
     PRINT = auto()
     ASK = auto()
     SEND_PETITION = auto()
+    LIMIT_API = auto()
     
     # Funciones y Rutas
     CALL_FUNC = auto()
@@ -635,6 +636,12 @@ class swaraBytecodeEngine:
                 if match: bytecode.append((Opcode.SEND_PETITION, match.group(1).strip(), line_num))
                 i += 1
 
+            # RATE LIMITING
+            elif line.startswith("limit.api"):
+                match = re.search(r"limit\.api\[(.*?),\s*(.*?),\s*(.*?)\]", line)
+                if match: bytecode.append((Opcode.LIMIT_API, match.group(1).strip(), match.group(2).strip(), match.group(3).strip(), line_num))
+                i += 1
+
             # RUTAS ACTIVAS
             elif line.startswith("route"):
                 if "->" in line:
@@ -1180,6 +1187,22 @@ class swaraBytecodeEngine:
                     self.output_handler(f"[NETWORK]: Petition sent -> {payload}")
                     pc += 1
 
+                elif opcode == Opcode.LIMIT_API:
+                    _, ip_var, max_req_var, time_var, _ = instruction
+                    
+                    def resolve_val(var_str):
+                        if var_str in self.variables:
+                            self._enforce_scope(var_str, line_num)
+                            return self.variables[var_str]["value"]
+                        return var_str.replace('"', '')
+
+                    ip_val = str(resolve_val(ip_var))
+                    max_req_val = int(resolve_val(max_req_var))
+                    time_val = float(resolve_val(time_var))
+                    
+                    import swara_limit_lib
+                    swara_limit_lib.check_limit(self, ip_val, max_req_val, time_val, line_num)
+                    pc += 1
 
                 elif opcode == Opcode.JUMP:
                     _, target_idx, _ = instruction

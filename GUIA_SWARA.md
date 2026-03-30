@@ -227,6 +227,13 @@ set correo = call function std.mask.email[usuario.email] -> txt;
 // Enmascara información completa en asteriscos
 set oculto = call function std.mask.hidden[pwd] -> txt;
 `
+
+**std.limit (Control de Tasa / Rate Limiting):**
+Librería nativa para evitar que tu API sea saturada o reciba ataques DoS. Detiene la ejecución instantáneamente si la IP sobrepasa el límite.
+```swara
+// Bloquea conexiones de 'ip' si sobrepasa 10 peticiones en 1 segundo.
+limit.api[ip, 10, 1];
+```
 ---
 
 ## 🔀 6. Estructuras de Control (Condicionales)
