@@ -270,6 +270,19 @@ delimiter fncs definicion {
 ```
 Al importar, tu código de la capa `lgca` ahora reconocerá `generar_pdf["Docs", "out.pdf"]` como un comando 100% nativo. Las respuestas del motor en Python se capturan en la variable especial de solo lectura `sys.last_bridge_response`.
 
+### Túnel Base64 (Manejo de Archivos)
+Si la función en tu archivo `bridge.py` devuelve **datos binarios crudos** (tipo `bytes` en Python, por ejemplo el contenido de un PDF, ZIP o imagen PNG en memoria), Swara se encarga de crear un "Túnel Base64".
+El motor codifica silenciosamente los `bytes` a una cadena gigantesca en formato **Base64** y la guarda automáticamente en `sys.last_bridge_response` como un texto compatible (`txt`). 
+
+Luego, en tu capa de Lógica, puedes guardar directamente este resultado a disco usando nuestro gestor nativo de archivos:
+```swara
+// En python bridge.py: return open("generado.pdf", "rb").read() 
+// Swara transforma eso a Base64 por detrás.
+
+write.bin["/mi_carpeta/archivo_final.pdf", sys.last_bridge_response];
+console.print["Archivo binario exportado correctamente."];
+```
+
 ---
 
 ## 🔀 7. Estructuras de Control (Condicionales)

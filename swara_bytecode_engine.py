@@ -1770,7 +1770,19 @@ class swaraBytecodeEngine:
                         
                         # Si devuelve algo lo guardamos en last_bridge_response o lo ignoramos
                         if result is not None:
-                            self.variables["sys.last_bridge_response"] = {"value": result, "type": "txt"}
+                            if isinstance(result, bytes):
+                                import base64
+                                b64_str = base64.b64encode(result).decode('utf-8')
+                                self.variables["sys.last_bridge_response"] = {"value": b64_str, "type": "txt"}
+                            elif isinstance(result, list):
+                                self.variables["sys.last_bridge_response"] = {"value": result, "type": "list"}
+                            elif isinstance(result, bool):
+                                self.variables["sys.last_bridge_response"] = {"value": result, "type": "bin"}
+                            elif isinstance(result, (int, float)):
+                                v_type = "num" if isinstance(result, int) else "dec"
+                                self.variables["sys.last_bridge_response"] = {"value": result, "type": v_type}
+                            else:
+                                self.variables["sys.last_bridge_response"] = {"value": str(result), "type": "txt"}
                             
                     except Exception as e:
                         if "NATIVE BRIDGE ERROR" in str(e) or "BOUNDARY ERROR" in str(e):

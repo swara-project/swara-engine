@@ -270,6 +270,19 @@ delimiter fncs definition {
 ```
 After the import, your regular `lgca` code recognizes `generate_pdf["Docs", "out.pdf"]` as a 100% native Swara reserved command globally. Responses processed back from the Python layer are automatically mapped into the special read-only system variable `sys.last_bridge_response`.
 
+### Base64 File Tunneling
+If the exposed function inside your `bridge.py` file returns **raw binary data** (a Python `bytes` array representing an image, ZIP, or PDF payload in-memory), Swara executes a "Base64 Tunneling" protocol. 
+The core engine silently converts the byte strings into a standard **Base64** text sequence and safely deposits it into `sys.last_bridge_response` as a standard `txt` type variable.
+
+Then, from your logic runtime, you can seamlessly dump it back into your local machine's disk as a true physical file utilizing Swara's binary handler:
+```swara
+// In python bridge.py: return open("generated.pdf", "rb").read()
+// Swara handles the Base64 cast beneath the engine.
+
+write.bin["/my_folder/final_file.pdf", sys.last_bridge_response];
+console.print["Binary file successfully exported."];
+```
+
 ---
 
 ## 🔀 7. Control Structures (Conditionals)
