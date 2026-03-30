@@ -59,6 +59,9 @@ class Opcode(Enum):
     # Funciones y Rutas
     CALL_FUNC = auto()
     RETURN = auto()
+    
+    # Puente Nativo a Python
+    BRIDGE_CALL = auto()
 
 
 class _GiveException(Exception):
@@ -86,6 +89,7 @@ class swaraBytecodeEngine:
         self._fatally_failed = False
         self._fatal_error = None
         self.checkpoint_file = ".swchk"
+        self.bridge_commands = {}
 
     def error(self, error_type, message, line_num="?"):
         error_msg = f"[{error_type}] Line {line_num} in '{self.current_file}':\n-> {message}"
@@ -314,13 +318,14 @@ class swaraBytecodeEngine:
                     expectations[item.strip()] = None
             self.route_expectations[block_name] = expectations
             
-        # Extraemos el contenido de todo el programa (ignorando todo hasta el inicio pero preservando 'link from')
+        # Extraemos el contenido de todo el programa (ignorando todo hasta el inicio pero preservando 'link from' y 'import.module')
         # Para que los links externos (link from ...) funcionen, extraemos solo su bloque para las instrucciones a analizar, 
         # PERO incluimos los 'link from' explícitamente ya que suelen ir afuera del delimiter.
         links = "\n".join(re.findall(r"link\s+from\s+[^;\n]+;?", code[:delimiter_match.start()]))
+        imports = "\n".join(re.findall(r"import\.module\[[^\]]+\];?", code[:delimiter_match.start()]))
         block_content = delimiter_match.group(4)
         
-        return links + "\n" + block_content
+        return links + "\n" + imports + "\n" + block_content
 
     def get_instructions(self, content):
         clean_content = re.sub(r"\/\/.*", "", content)
@@ -333,7 +338,7 @@ class swaraBytecodeEngine:
                 instructions.append((line.replace("};", "}"), line_num))
                 continue
             if not line.endswith(";"):
-                if not any(kw in line for kw in ["if", "else", "loop", "crte", "form", "switch", "case", "default"]):
+                if not any(kw in line for kw in ["if", "else", "loop", "crte", "form", "switch", "case", "default", "bridge", "import"]):
                     pass # Evitamos error estricto de sintaxis aquí para simplificar
             instructions.append((line.rstrip(";").strip(), line_num))
         return instructions
@@ -621,7 +626,90 @@ class swaraBytecodeEngine:
                 i = end_i + 1
                 continue
                 
-            # FUNCIONES
+            # IMPORT MODULE
+            elif line.startswith("import.module"):
+                match = re.search(r'import\.module\["(.*?)"\]', line)
+                if match:
+                    mod_input = match.group(1)
+                    if mod_input.startswith("http"):
+                        # Install from git repository
+                        mod_name = mod_input.rstrip("/").replace(".git", "").split("/")[-1]
+                        sw_mods_dir = os.path.abspath(os.path.join(os.getcwd(), "sw_modules"))
+                        base_dir = os.path.join(sw_mods_dir, mod_name)
+                        
+                        if not os.path.exists(base_dir):
+                            import subprocess
+                            self.output_handler(f"[MODULE SYSTEM] Installing {mod_name} from {mod_input}...")
+                            os.makedirs(sw_mods_dir, exist_ok=True)
+                            try:
+                                subprocess.run(["git", "clone", mod_input, base_dir], check=True, capture_output=True)
+                            except Exception as e:
+                                self.error("MODULE INSTALL ERROR", f"Failed to download module from {mod_input}.", line_num)
+                    else:
+                        mod_name = mod_input
+                        base_dir = os.path.abspath(os.path.join(os.getcwd(), "sw_modules", mod_name))
+
+                    bridge_py = os.path.join(base_dir, "bridge.py")
+                    contract_swara = os.path.join(base_dir, "contract.swara")
+
+                    if not os.path.exists(bridge_py) or not os.path.exists(contract_swara):
+                        self.error("MODULE STRUCTURE ERROR", f"Module '{mod_name}' must contain both 'bridge.py' and 'contract.swara' in /sw_modules/{mod_name}.", line_num)
+
+                    # Dynamic Context Loader
+                    contract_code = self.load_file(contract_swara)
+                    if contract_code:
+                        c_content = self.validate_passport(contract_code)
+                        c_insts = self.get_instructions(c_content)
+                        for cmd_line, cmd_ln in c_insts:
+                            if cmd_line.startswith("crte command"):
+                                cmd_match = re.search(r"crte\s+command\s+(\w+)\s*\[(.*?)\]", cmd_line)
+                                if cmd_match:
+                                    cmd_name = cmd_match.group(1)
+                                    params_str = cmd_match.group(2)
+                                    params = []
+                                    if params_str and params_str.strip():
+                                        for p in params_str.split(","):
+                                            if "->" in p:
+                                                p_name, p_type = p.split("->")
+                                                params.append({"name": p_name.strip(), "type": p_type.strip()})
+                                            else:
+                                                params.append({"name": p.strip(), "type": "any"})
+                                    self.bridge_commands[cmd_name] = {
+                                        "py_file": bridge_py,
+                                        "engine_name": mod_name,
+                                        "params": params
+                                    }
+                i += 1
+                continue
+
+            # FUNCIONES Y BRIDGE
+            elif line.startswith("bridge to"):
+                match = re.search(r'bridge\s+to\s+"(.*?)"\s+as\s+(\w+)\s*\{', line)
+                if match:
+                    py_file = match.group(1)
+                    engine_name = match.group(2)
+                    body_inst, end_i = self._collect_block(instructions, i)
+                    for cmd_line, cmd_ln in body_inst:
+                        if cmd_line.startswith("crte command"):
+                            cmd_match = re.search(r"crte\s+command\s+(\w+)\s*\[(.*?)\]", cmd_line)
+                            if cmd_match:
+                                cmd_name = cmd_match.group(1)
+                                params_str = cmd_match.group(2)
+                                params = []
+                                if params_str.strip():
+                                    for p in params_str.split(","):
+                                        if "->" in p:
+                                            p_name, p_type = p.split("->")
+                                            params.append({"name": p_name.strip(), "type": p_type.strip()})
+                                        else:
+                                            params.append({"name": p.strip(), "type": "any"})
+                                self.bridge_commands[cmd_name] = {
+                                    "py_file": py_file,
+                                    "engine_name": engine_name,
+                                    "params": params
+                                }
+                    i = end_i + 1
+                    continue
             elif line.startswith("crte function"):
                 match = re.search(r"crte function\s+(\w+)\s*\[(.*?)\]\s*\{", line)
                 if match:
@@ -817,6 +905,22 @@ class swaraBytecodeEngine:
                 i += 1
                 
             else:
+                # Comprobar comandos bridge
+                found_cmd = None
+                for cmd in getattr(self, 'bridge_commands', {}):
+                    if line.startswith(f"{cmd}["):
+                        found_cmd = cmd
+                        break
+                if found_cmd:
+                    match = re.search(rf"{found_cmd}\[(.*?)\]", line)
+                    if match:
+                        args_str = match.group(1)
+                        # Partir por comas, asumiendo no comas dentro de strings por simplicidad (como en el resto del motor)
+                        args_list = [a.strip() for a in args_str.split(",") if a.strip()]
+                        bytecode.append((Opcode.BRIDGE_CALL, found_cmd, args_list, line_num))
+                    i += 1
+                    continue
+                
                 # Ignoramos cosas no implementadas en el demo
                 i += 1
                 
@@ -1609,6 +1713,69 @@ class swaraBytecodeEngine:
                     
                     import swara_limit_lib
                     swara_limit_lib.check_limit(self, ip_val, max_req_val, time_val, line_num)
+                    pc += 1
+
+                elif opcode == Opcode.BRIDGE_CALL:
+                    import importlib.util
+                    import sys
+                    
+                    _, cmd_name, args_list, _ = instruction
+                    cmd_meta = self.bridge_commands.get(cmd_name)
+                    if not cmd_meta:
+                        self.error("NATIVE BRIDGE ERROR", f"Command '{cmd_name}' has no registered bridge.", line_num)
+                        
+                    py_file = cmd_meta["py_file"]
+                    engine_name = cmd_meta["engine_name"]
+                    
+                    resolved_args = []
+                    for arg in args_list:
+                        arg_clean = arg.strip('"\'')
+                        if arg_clean in self.variables:
+                            self._enforce_scope(arg_clean, line_num)
+                            resolved_args.append(self.variables[arg_clean]["value"])
+                        else:
+                            # Intento de parseo basico num / bool
+                            if arg_clean.isdigit():
+                                resolved_args.append(int(arg_clean))
+                            elif arg_clean.lower() == "yes":
+                                resolved_args.append(True)
+                            elif arg_clean.lower() == "no":
+                                resolved_args.append(False)
+                            else:
+                                resolved_args.append(arg_clean)
+                    
+                    base_dir = os.path.abspath(os.path.join(os.getcwd(), "libraries"))
+                    py_path = py_file if os.path.isabs(py_file) else os.path.join(base_dir, py_file)
+                    
+                    # Fallback al dir actual
+                    if not os.path.exists(py_path):
+                        py_path = os.path.abspath(os.path.join(os.getcwd(), py_file))
+                        
+                    if not os.path.exists(py_path):
+                        self.error("NATIVE BRIDGE ERROR", f"The bridge engine file '{py_file}' was not found.", line_num)
+                        
+                    module_name = f"swara_ext_{engine_name}"
+                    try:
+                        spec = importlib.util.spec_from_file_location(module_name, py_path)
+                        bridge_module = importlib.util.module_from_spec(spec)
+                        sys.modules[module_name] = bridge_module
+                        spec.loader.exec_module(bridge_module)
+                        
+                        if not hasattr(bridge_module, cmd_name):
+                            self.error("NATIVE BRIDGE ERROR", f"The file '{py_file}' does not expose a native python function named '{cmd_name}'.", line_num)
+                            
+                        # Invocar
+                        func = getattr(bridge_module, cmd_name)
+                        result = func(*resolved_args)
+                        
+                        # Si devuelve algo lo guardamos en last_bridge_response o lo ignoramos
+                        if result is not None:
+                            self.variables["sys.last_bridge_response"] = {"value": result, "type": "txt"}
+                            
+                    except Exception as e:
+                        if "NATIVE BRIDGE ERROR" in str(e) or "BOUNDARY ERROR" in str(e):
+                            raise e
+                        self.error("NATIVE BRIDGE ERROR", f"Bridge '{engine_name}' execution failed: {str(e)}", line_num)
                     pc += 1
 
                 elif opcode == Opcode.JUMP:

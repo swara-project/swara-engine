@@ -1,0 +1,5 @@
+declare contract.swara ass fncs
+
+delimiter fncs contract {
+    crte command generate_qr [contenido -> txt, destino -> txt];
+}
