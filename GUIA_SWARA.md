@@ -292,6 +292,9 @@ update identificadores[1] = "Intercambio en idx";
 * `update.list[lista, nuevo_valor];` : Realiza un append; suma un valor tras el último índice en la matriz.
 * `pull.list[lista, variable_huesped];` : Invoca un `List_Pop` del último elemento dinámicamente y lo graba en `variable_huesped`.
 * `size.list[lista, var_medidora];` : Mide el tamaño de toda la lista y lo pasa a una variable pre-definida `var_medidora` (tipo `num`).
+* `sort.list[lista, "asc"];` : Ordena la lista en sí misma. Acepta `"asc"` (ascendente) o `"desc"` (descendente) como orden. Soporta ordenamiento numérico o alfabético.
+* `unique.list[lista];` : Muta la lista removiendo cualquier elemento duplicado, manteniendo el orden de los elementos originales.
+* `reverse.list[lista];` : Invierte físicamente el orden actual de todos los elementos pertenecientes en la matriz.
 
 ### Manipulación de Texto y Listas (Transformaciones)
 Esencial para procesar cadenas provenientes de inputs (`ask`) o retornos (`send.petition`). En sus variadas formas, permiten desarmar y rearmar variables de texto orgánicamente.

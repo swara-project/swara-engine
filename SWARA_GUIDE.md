@@ -292,6 +292,10 @@ update identifiers[1] = "Swap at idx";
 * `update.list[list, new_value];` : Performs an append; adds a value after the last index in the array.
 * `pull.list[list, host_variable];` : Invokes a dynamic `List_Pop` of the last element and saves it into `host_variable`.
 * `size.list[list, measuring_var];` : Measures the length of the entire list and passes it to an existing `measuring_var` variable (of type `num`).
+* `sort.list[list, "asc"];` : Orders the list in-place. Accepts `"asc"` (ascending) or `"desc"` (descending) sorting rules. Supports both numeric and alphabetical sorts safely.
+* `unique.list[list];` : Mutates the list by stripping duplicates while natively preserving the original insertion order.
+* `reverse.list[list];` : Physically reverses the existing layout matrix order.
+
 ### Text & List Manipulations (Transformations)
 Crucial to process queries returning from inputs (`ask`) or API responses (`send.petition`). In multiple shapes, they allow unrolling and rolling strings organically.
 

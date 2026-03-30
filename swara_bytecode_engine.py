@@ -18,6 +18,9 @@ class Opcode(Enum):
     LIST_SIZE = auto()
     LIST_GET_INDEX = auto()
     LIST_SET_INDEX = auto()
+    LIST_SORT = auto()
+    LIST_UNIQUE = auto()
+    LIST_REVERSE = auto()
     
     # Text Operations
     TXT_SPLIT = auto()
@@ -413,6 +416,18 @@ class swaraBytecodeEngine:
             elif line.startswith("size.list"):
                 match = re.search(r"size\.list\[\s*(\w+)\s*,\s*(\w+)\s*\]", line)
                 if match: bytecode.append((Opcode.LIST_SIZE, match.group(1), match.group(2).strip(), line_num))
+                i += 1
+            elif line.startswith("sort.list"):
+                match = re.search(r"sort\.list\[\s*(\w+)\s*,\s*(.*?)\s*\]", line)
+                if match: bytecode.append((Opcode.LIST_SORT, match.group(1), match.group(2).strip(), line_num))
+                i += 1
+            elif line.startswith("unique.list"):
+                match = re.search(r"unique\.list\[\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.LIST_UNIQUE, match.group(1), line_num))
+                i += 1
+            elif line.startswith("reverse.list"):
+                match = re.search(r"reverse\.list\[\s*(\w+)\s*\]", line)
+                if match: bytecode.append((Opcode.LIST_REVERSE, match.group(1), line_num))
                 i += 1
                 
             # TEXT & LIST TRANSFORMS
@@ -1049,6 +1064,72 @@ class swaraBytecodeEngine:
                     if lst_name in self.variables and self.variables[lst_name]["type"] == "list":
                         self._enforce_scope(lst_name, line_num)
                         self._register_variable(trg_var, len(self.variables[lst_name]["value"]), "num", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.LIST_SORT:
+                    _, lst_name, order_type, _ = instruction
+                    if lst_name in self.variables and self.variables[lst_name]["type"] == "list":
+                        self._enforce_scope(lst_name, line_num)
+                        lst = self.variables[lst_name]["value"]
+                        self._enforce_mutability_and_warn(
+                            lst_name,
+                            self.variables[lst_name].get("behavior", "mutable"),
+                            self.variables[lst_name].get("derived_from"),
+                            line_num,
+                            expression="SORT",
+                            is_init=False
+                        )
+                        order_clean = order_type.strip('"\'')
+                        if order_clean in self.variables:
+                            order_clean = str(self.variables[order_clean]["value"])
+                            
+                        reverse_flag = True if order_clean == "desc" else False
+                        try:
+                            # Intenta primero sort natural si los tipos son consistentes
+                            self.variables[lst_name]["value"] = sorted(lst, reverse=reverse_flag)
+                        except TypeError:
+                            # Si los tipos son mixtos, los pasamos a string para el sort seguro
+                            self.variables[lst_name]["value"] = sorted(lst, key=str, reverse=reverse_flag)
+                    else:
+                        self.error("REFERENCE ERROR", f"Variable '{lst_name}' is not a list or doesn't exist.", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.LIST_UNIQUE:
+                    _, lst_name, _ = instruction
+                    if lst_name in self.variables and self.variables[lst_name]["type"] == "list":
+                        self._enforce_scope(lst_name, line_num)
+                        lst = self.variables[lst_name]["value"]
+                        self._enforce_mutability_and_warn(
+                            lst_name,
+                            self.variables[lst_name].get("behavior", "mutable"),
+                            self.variables[lst_name].get("derived_from"),
+                            line_num,
+                            expression="UNIQUE",
+                            is_init=False
+                        )
+                        # Remove duplicates but preserve order natively instead of simple set()
+                        seen = set()
+                        unique_list = [x for x in lst if not (x in seen or seen.add(x))]
+                        self.variables[lst_name]["value"] = unique_list
+                    else:
+                        self.error("REFERENCE ERROR", f"Variable '{lst_name}' is not a list or doesn't exist.", line_num)
+                    pc += 1
+
+                elif opcode == Opcode.LIST_REVERSE:
+                    _, lst_name, _ = instruction
+                    if lst_name in self.variables and self.variables[lst_name]["type"] == "list":
+                        self._enforce_scope(lst_name, line_num)
+                        self._enforce_mutability_and_warn(
+                            lst_name,
+                            self.variables[lst_name].get("behavior", "mutable"),
+                            self.variables[lst_name].get("derived_from"),
+                            line_num,
+                            expression="REVERSE",
+                            is_init=False
+                        )
+                        self.variables[lst_name]["value"].reverse()
+                    else:
+                        self.error("REFERENCE ERROR", f"Variable '{lst_name}' is not a list or doesn't exist.", line_num)
                     pc += 1
 
                 elif opcode == Opcode.TXT_SPLIT:
