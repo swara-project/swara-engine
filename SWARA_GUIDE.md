@@ -273,9 +273,58 @@ Native library to prevent your API from being saturated or receiving DoS attacks
 // Blocks connections from 'ip' if it exceeds 10 requests in 1 second.
 limit.api[ip, 10, 1];
 ```
+
 ---
 
-## 🔀 6. Control Structures (Conditionals)
+## 🌉 6. Module System (Native Extensibility Bridge)
+Swara is not constrained only to the functions in its `Core`. It has a hybrid module system that allows injecting any external capabilities (AI, Bluetooth, Computer Vision, etc.) utilizing Python-built libraries without the developer ever leaving Swara's natural syntax.
+
+### Moduling Installation
+Modules must be placed entirely within a folder called `/sw_modules` inside your project root. The engine also features automatic remote module downloading utilizing the special `import.module` instruction.
+
+```swara
+// Importing a local module placed in /sw_modules/my_module
+import.module["my_module"];
+
+// Remote installing directly into /sw_modules dropping it via git cloning
+import.module["https://github.com/user/my_library_repo"];
+```
+
+### The Bridge Block & Contracts
+Every external module conforms to two files logically:
+1. `bridge.py`: The Python wrapping script bridging heavy workloads.
+2. `contract.swara`: (`fncs` layer) Exposes strictly the command signatures bridging the system together via a `bridge` block.
+
+**Contract Example (contract.swara):**
+```swara
+declare my_library.swara ass fncs
+
+delimiter fncs definition {
+    // Links to underlying python script sandbox 
+    bridge to "bridge.py" as python_engine {
+        // Teaches the Swara compiler a wildly new reserved keyword 
+        crte command generate_pdf [content -> txt, destination -> txt];
+    }
+}
+```
+After the import, your regular `lgca` code recognizes `generate_pdf["Docs", "out.pdf"]` as a 100% native Swara reserved command globally. Responses processed back from the Python layer are automatically mapped into the special read-only system variable `sys.last_bridge_response`.
+
+### Base64 File Tunneling
+If the exposed function inside your `bridge.py` file returns **raw binary data** (a Python `bytes` array representing an image, ZIP, or PDF payload in-memory), Swara executes a "Base64 Tunneling" protocol. 
+The core engine silently converts the byte strings into a standard **Base64** text sequence and safely deposits it into `sys.last_bridge_response` as a standard `txt` type variable.
+
+Then, from your logic runtime, you can seamlessly dump it back into your local machine's disk as a true physical file utilizing Swara's binary handler:
+```swara
+// In python bridge.py: return open("generated.pdf", "rb").read()
+// Swara handles the Base64 cast beneath the engine.
+
+write.bin["/my_folder/final_file.pdf", sys.last_bridge_response];
+console.print["Binary file successfully exported."];
+```
+
+---
+
+## 🔀 7. Control Structures (Conditionals)
 Exclusive to logic blocks, these operate without a semicolon at the end of their block braces `{ }`.
 
 **If / Else If / Else:**
@@ -331,6 +380,10 @@ update identifiers[1] = "Swap at idx";
 * `update.list[list, new_value];` : Performs an append; adds a value after the last index in the array.
 * `pull.list[list, host_variable];` : Invokes a dynamic `List_Pop` of the last element and saves it into `host_variable`.
 * `size.list[list, measuring_var];` : Measures the length of the entire list and passes it to an existing `measuring_var` variable (of type `num`).
+* `sort.list[list, "asc"];` : Orders the list in-place. Accepts `"asc"` (ascending) or `"desc"` (descending) sorting rules. Supports both numeric and alphabetical sorts safely.
+* `unique.list[list];` : Mutates the list by stripping duplicates while natively preserving the original insertion order.
+* `reverse.list[list];` : Physically reverses the existing layout matrix order.
+
 ### Text & List Manipulations (Transformations)
 Crucial to process queries returning from inputs (`ask`) or API responses (`send.petition`). In multiple shapes, they allow unrolling and rolling strings organically.
 

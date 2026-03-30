@@ -5,7 +5,7 @@ import os
 # Agregar la raíz al sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.swara_runtime import swaraRuntime
+from swara_runtime import swaraRuntime
 
 def main():
     parser = argparse.ArgumentParser(description="swara Language Compiler & Runtime")

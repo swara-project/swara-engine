@@ -1,0 +1,12 @@
+declare test_modules.swara ass lgca
+
+import.module["sw_qr_manager"];
+
+delimiter lgca test_modules {
+    console.print["Iniciando prueba de modulo externo..."];
+    
+    generate_qr["SWARA LANGUAGE ROCKS!", "test_codigo.png"];
+    
+    console.print["Respuesta del modulo bridge:"];
+    console.print[sys.last_bridge_response];
+}
