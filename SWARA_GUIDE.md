@@ -324,7 +324,20 @@ update identifiers[1] = "Swap at idx";
 * `update.list[list, new_value];` : Performs an append; adds a value after the last index in the array.
 * `pull.list[list, host_variable];` : Invokes a dynamic `List_Pop` of the last element and saves it into `host_variable`.
 * `size.list[list, measuring_var];` : Measures the length of the entire list and passes it to an existing `measuring_var` variable (of type `num`).
+### Text & List Manipulations (Transformations)
+Crucial to process queries returning from inputs (`ask`) or API responses (`send.petition`). In multiple shapes, they allow unrolling and rolling strings organically.
 
+* `split.txt[variable, separator, dest_list];` : Splits text into segments divided by the given separator and injects them as indexes onto a defined `list` element.
+* `join.list[list, connector, dest_txt];` : Inverse action. Glues the elements back together placing a string connector achieving a joined `txt` sequence.
+* `clean.txt[variable];` : Acts exactly as "trim". Clears trailing and starting blank spaces on your variable re-updating it without manually commanding `update`.
+* `find.txt[source, search, result_bin];` : Verifies if a substring in `search` occurs within a `source`. Stores evaluating truth output boolean `yes` or `no` directly sequentially to `result_bin`.
+
+### File System Operations (Disk Management)
+Swara incorporates file boundaries using "sandbox" principles. To protect your disks maliciously, reading and writing files is forcibly contained down to an automatically created `/storage` sub-directory near the engine runtime execution folder.
+
+* `write.file["filepath.txt", content];` : Dumps a variable string or explicitly declared raw text generating/overwriting the indicated target (Ex. `records.txt` writes physically on `storage/records.txt`).
+* `read.file["filepath.txt", dest_var];` : Engages a disk read operation, finding the target matching inside `/storage` depositing raw string contents inside an existing `txt` `dest_var`.
+* `check.file["filepath.txt", bin_var];` : Quietly reviews file existence before crashing your workflow in a standard read, feeding your `bin_var` with logical existence verification result.
 ---
 
 ## ⚡ 9. Function Invocation

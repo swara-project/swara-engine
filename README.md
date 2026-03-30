@@ -127,6 +127,8 @@ Variables are initiated via `set` and transformed via `update`. Data types (`num
 The internal virtual machine processes the following opcodes (as defined in `Opcode(Enum)`):
 - **Variables**: `SET`, `UPDATE`
 - **Lists**: `LIST_APPEND`, `LIST_POP`, `LIST_SIZE`, `LIST_GET_INDEX`, `LIST_SET_INDEX`
+- **Text & List Transforms**: `TXT_SPLIT`, `LIST_JOIN`, `TXT_CLEAN`, `TXT_FIND`
+- **File System**: `FILE_WRITE`, `FILE_READ`, `FILE_CHECK` (Sandboxed to `/storage`)
 - **Control Flow**: `ROUTE_TRANSITION`, `ORCHESTRATE` (legacy jumping opcodes have been deprecated)
 - **I/O & DB**: `PRINT`, `ASK`, `SEND_PETITION`, `OPEN_DB`, `EXEC_DB`, `LISTEN_API`, `REPLY_API`, `FILL_HTML`
 - **Execution**: `CALL_FUNC`, `RETURN`, `ROUTE_TRANSITION`, `NOOP`
